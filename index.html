@@ -16,7 +16,11 @@
   .legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:.8rem;color:var(--sub);margin:6px 0 4px;align-items:center}
   .lg{display:inline-flex;align-items:center;gap:5px}
   .chip{display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#fff;
-    border-radius:5px;font-size:.66rem;line-height:1;padding:2px 4px;min-width:17px}
+    border-radius:5px;font-size:.66rem;line-height:1;padding:3px 5px;min-width:18px;cursor:pointer}
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1a2733;color:#fff;
+    padding:11px 16px;border-radius:10px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.25);
+    opacity:0;pointer-events:none;transition:opacity .15s;max-width:90vw;text-align:center;z-index:50}
+  #toast.show{opacity:1}
   .c-tac{background:var(--tac)} .c-yoko{background:var(--yoko)} .c-zen{background:var(--zen)}
   .part{background:#fff !important;border:1.5px dashed var(--zen);color:var(--zen)}
   .note{background:#fff8e7;border:1px solid #f0e0b8;border-radius:10px;padding:9px 12px;font-size:.76rem;color:#7a5a14;margin:8px 0 6px;line-height:1.7}
@@ -51,7 +55,7 @@
     <span class="lg"><span class="chip c-zen part">善</span>善行・一部休止</span>
   </div>
   <div class="note">
-    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は3館とも営業。点線の「善」は<b>一部時間帯のみ休止</b>（チップにマウスを乗せると時間表示）。
+    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は3館とも営業。点線の「善」は<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。
   </div>
   <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
     <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b>9/24(木)まで</b>。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
@@ -62,6 +66,7 @@
     <label><input type="checkbox" id="ck-zen" checked> 善行</label>
   </div>
   <div id="cal"></div>
+  <div id="toast"></div>
   <div class="foot">
     出典（公式）：
     <a href="https://www.tef.or.jp/tac/closure.html" target="_blank" rel="noopener">アクア休館日</a>・
@@ -119,7 +124,7 @@ const ZEN=new Set();
 const W=["日","月","火","水","木","金","土"];
 const now=new Date(); const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})); const TODAY=iso(jst);
 
-function chip(cls,label,title){return '<span class="chip '+cls+'" title="'+title+'">'+label+'</span>';}
+function chip(cls,label,title){return '<span class="chip '+cls+'" title="'+title+'" data-info="'+title+'">'+label+'</span>';}
 function ck(id){return document.getElementById(id).checked;}
 function build(){
   const show={tac:ck('ck-tac'),yoko:ck('ck-yoko'),zen:ck('ck-zen')};
@@ -146,6 +151,15 @@ function build(){
 }
 ["ck-tac","ck-yoko","ck-zen"].forEach(id=>document.getElementById(id).addEventListener("change",build));
 build();
+
+// スマホ用：チップをタップすると下に内容（時間など）を表示
+const toast=document.getElementById('toast'); let toastTimer;
+document.getElementById('cal').addEventListener('click',function(e){
+  const c=e.target.closest('.chip'); if(!c)return;
+  const info=c.getAttribute('data-info'); if(!info)return;
+  toast.textContent=info; toast.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){toast.classList.remove('show');},4000);
+});
 </script>
 </body>
 </html>
