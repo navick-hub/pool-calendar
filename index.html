@@ -21,6 +21,7 @@
     padding:11px 16px;border-radius:10px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.25);
     opacity:0;pointer-events:none;transition:opacity .15s;max-width:90vw;text-align:center;z-index:50}
   #toast.show{opacity:1}
+  .chip.sel{outline:3px solid #1a2733;outline-offset:1px}
   .c-tac{background:var(--tac)} .c-yoko{background:var(--yoko)} .c-zen{background:var(--zen)}
   .part{background:#fff !important;border:1.5px dashed var(--zen);color:var(--zen)}
   .note{background:#fff8e7;border:1px solid #f0e0b8;border-radius:10px;padding:9px 12px;font-size:.76rem;color:#7a5a14;margin:8px 0 6px;line-height:1.7}
@@ -137,11 +138,12 @@ function build(){
     for(let day=1;day<=dim;day++){
       const d=new Date(y,m-1,day); const s=iso(d); const wd=d.getDay();
       let cls="cell"; if(wd===0||wd===6)cls+=" wend"; if(s===TODAY)cls+=" today";
+      const dl=m+"/"+day+"（"+W[wd]+"） ";
       let chips="";
-      if(show.tac&&TAC[s]) chips+=chip("c-tac","ア","アクア："+TAC[s]);
-      if(show.yoko&&YOKO[s]) chips+=chip("c-yoko","横","横浜国際："+YOKO[s]);
-      if(show.zen&&ZEN.has(s)) chips+=chip("c-zen","善","善行：休館（月曜/祝日翌日/年末年始）");
-      else if(show.zen&&ZEN_PART[s]) chips+=chip("c-zen part","善","善行："+ZEN_PART[s]);
+      if(show.tac&&TAC[s]) chips+=chip("c-tac","ア",dl+"アクア："+TAC[s]);
+      if(show.yoko&&YOKO[s]) chips+=chip("c-yoko","横",dl+"横浜国際："+YOKO[s]);
+      if(show.zen&&ZEN.has(s)) chips+=chip("c-zen","善",dl+"善行：休館（月曜/祝日翌日/年末年始）");
+      else if(show.zen&&ZEN_PART[s]) chips+=chip("c-zen part","善",dl+"善行："+ZEN_PART[s]);
       html+='<div class="'+cls+'"><div class="dnum '+(wd===0?'sun':wd===6?'sat':'')+'">'+day+'<span class="wd">'+W[wd]+'</span></div><div class="chips">'+chips+'</div></div>';
     }
     html+='</div></div>';
@@ -157,8 +159,10 @@ const toast=document.getElementById('toast'); let toastTimer;
 document.getElementById('cal').addEventListener('click',function(e){
   const c=e.target.closest('.chip'); if(!c)return;
   const info=c.getAttribute('data-info'); if(!info)return;
+  document.querySelectorAll('.chip.sel').forEach(function(x){x.classList.remove('sel');});
+  c.classList.add('sel');
   toast.textContent=info; toast.classList.add('show');
-  clearTimeout(toastTimer); toastTimer=setTimeout(function(){toast.classList.remove('show');},4000);
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){toast.classList.remove('show');c.classList.remove('sel');},4500);
 });
 </script>
 </body>
