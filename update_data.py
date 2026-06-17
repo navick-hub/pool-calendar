@@ -42,8 +42,9 @@ def parse_tac(html):
 
 # ---------- 善行：一部利用休止 ----------
 def parse_zengyo_partial(html):
-    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"<[^>]+>", "", html)
     text = z2h(text)
+    text = re.sub(r"\s+", "", text)   # 空白を全除去（日付と時刻の間にタグ/空白が入る対策）
     out = {}
     # 例: 令和8年6月17日（水曜日）16時から21時まで
     pat = re.compile(r"令和(\d+)年(\d{1,2})月(\d{1,2})日\([^)]*\)(\d{1,2})時から(\d{1,2})時まで")
@@ -130,6 +131,7 @@ def main():
     # 善行 一部休止
     try:
         zp = parse_zengyo_partial(get("https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html").text)
+        if not zp: raise ValueError("empty")
     except Exception as e:
         print("ZEN_PART failed, keep existing:", e); zp = cur_zen
 
