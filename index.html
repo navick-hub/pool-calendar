@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <h1>🏊 プール休館日カレンダー</h1>
-  <div class="upd">最終更新：2026/6/17（公式サイトより取得）</div>
+  <div class="upd" id="upd">最終更新：2026/6/17（公式サイトより取得）</div>
   <div class="legend">
     <span class="lg"><span class="chip c-tac">ア</span>東京アクアティクス</span>
     <span class="lg"><span class="chip c-yoko">横</span>横浜国際</span>
@@ -59,7 +59,7 @@
     チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は3館とも営業。点線の「善」は<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。
   </div>
   <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
-    <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b>9/24(木)まで</b>。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
+    <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b id="yoko-max">9/24(木)</b>まで。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
   </div>
   <div class="controls">
     <label><input type="checkbox" id="ck-tac" checked> アクア</label>
@@ -78,7 +78,9 @@
 </div>
 
 <script>
-// ===== 確定：東京アクアティクス（プール影響日のみ／公式表）=====
+// ===DATA-START（GitHub Actionsが自動生成。手で編集しない）===
+const LAST_UPDATED = "2026/6/17";
+// 確定：東京アクアティクス（プール影響日のみ／公式表）
 const TAC = {
  "2026-07-21":"全館休館","2026-08-17":"全館休館","2026-09-07":"全館休館","2026-10-19":"全館休館",
  "2026-11-07":"メイン・ダイビング休館","2026-11-08":"メイン・ダイビング休館","2026-11-09":"メイン・ダイビング休館","2026-11-10":"メイン・ダイビング休館",
@@ -89,9 +91,9 @@ const TAC = {
  "2027-01-01":"全館休館","2027-01-02":"全館休館","2027-01-03":"全館休館","2027-01-18":"全館休館",
  "2027-02-15":"全館休館","2027-02-16":"全館休館","2027-03-15":"全館休館"
 };
-// ===== 確定：横浜国際（公式チラシ）。9/24まで確定、10月以降は未発表 =====
+// 確定：横浜国際（公式チラシ）。10月以降は未発表
 const YOKO = { "2026-06-16":"休館日", "2026-09-24":"休館日" };
-// ===== 確定：善行 一部利用休止（公式「利用休止」ページ）=====
+// 確定：善行 一部利用休止（公式「利用休止」ページ）
 const ZEN_PART = {
  "2026-06-17":"16:00-21:00 利用休止","2026-06-18":"9:00-21:00 利用休止",
  "2026-08-02":"9:00-18:00 利用休止","2026-08-16":"13:00-21:00 利用休止",
@@ -99,6 +101,7 @@ const ZEN_PART = {
  "2026-09-06":"9:00-18:00 利用休止","2026-09-08":"16:00-18:00 利用休止",
  "2026-10-03":"9:00-18:00 利用休止","2026-10-14":"9:00-17:00 利用休止","2026-10-15":"9:00-17:00 利用休止"
 };
+// ===DATA-END===
 
 // ===== 祝日（範囲内）＋日曜なら振替 =====
 const baseHoliday=["2026-07-20","2026-08-11","2026-09-21","2026-09-22","2026-09-23",
@@ -151,6 +154,13 @@ function build(){
   }
   document.getElementById("cal").innerHTML=html;
 }
+// ヘッダの最終更新日・横浜国際の確定最終日を自動表示
+(function(){
+  var u=document.getElementById('upd'); if(u) u.textContent="最終更新："+LAST_UPDATED+"（公式サイトより取得）";
+  var ks=Object.keys(YOKO).sort(); var el=document.getElementById('yoko-max');
+  if(el){ if(ks.length){ var p=ks[ks.length-1].split('-'); var dd=new Date(+p[0],+p[1]-1,+p[2]); el.textContent=(+p[1])+'/'+(+p[2])+'('+W[dd.getDay()]+')'; } else { el.textContent='未取得'; } }
+})();
+
 ["ck-tac","ck-yoko","ck-zen"].forEach(id=>document.getElementById(id).addEventListener("change",build));
 build();
 
