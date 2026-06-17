@@ -116,6 +116,8 @@ def main():
     UA = {"User-Agent": "Mozilla/5.0 (pool-calendar updater)"}
     def get(url, **kw):
         return requests.get(url, headers=UA, timeout=30, **kw)
+    def gettext(url):
+        r = get(url); r.encoding = "utf-8"; return r.text  # charset未指定ページの文字化け対策
 
     with open(INDEX, encoding="utf-8") as f:
         html = f.read()
@@ -123,14 +125,14 @@ def main():
 
     # TAC
     try:
-        tac = parse_tac(get("https://www.tef.or.jp/tac/closure.html").text)
+        tac = parse_tac(gettext("https://www.tef.or.jp/tac/closure.html"))
         if not tac: raise ValueError("empty")
     except Exception as e:
         print("TAC failed, keep existing:", e); tac = cur_tac
 
     # 善行 一部休止
     try:
-        zp = parse_zengyo_partial(get("https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html").text)
+        zp = parse_zengyo_partial(gettext("https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"))
         if not zp: raise ValueError("empty")
     except Exception as e:
         print("ZEN_PART failed, keep existing:", e); zp = cur_zen
@@ -138,7 +140,7 @@ def main():
     # 横浜国際（スケジュールページ→当月/翌月PDF）
     yoko = dict(cur_yoko)
     try:
-        sched = get("https://yokohama-sport.jp/waterarena/schedule/").text
+        sched = gettext("https://yokohama-sport.jp/waterarena/schedule/")
         pdfs = re.findall(r'href="([^"]+\.pdf)"', sched)
         pdfs = [p if p.startswith("http") else ("https://yokohama-sport.jp"+p) for p in pdfs]
         seen = set()
