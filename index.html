@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>プール休館日カレンダー</title>
+<style>
+  :root{ --bg:#f4f7fa; --card:#fff; --ink:#1a2733; --sub:#6b7a89; --line:#e3e9ef;
+    --tac:#2f6fb5; --yoko:#1a9e5c; --zen:#d98324; --today:#fff3cf; --wend:#f7fafc; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+  .wrap{max-width:920px;margin:0 auto;padding:16px 12px 60px}
+  h1{font-size:1.2rem;margin:.2em 0 .1em}
+  .upd{font-size:.74rem;color:var(--sub);margin-bottom:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:.8rem;color:var(--sub);margin:6px 0 4px;align-items:center}
+  .lg{display:inline-flex;align-items:center;gap:5px}
+  .chip{display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#fff;
+    border-radius:5px;font-size:.66rem;line-height:1;padding:2px 4px;min-width:17px}
+  .c-tac{background:var(--tac)} .c-yoko{background:var(--yoko)} .c-zen{background:var(--zen)}
+  .part{background:#fff !important;border:1.5px dashed var(--zen);color:var(--zen)}
+  .note{background:#fff8e7;border:1px solid #f0e0b8;border-radius:10px;padding:9px 12px;font-size:.76rem;color:#7a5a14;margin:8px 0 6px;line-height:1.7}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+  .controls label{font-size:.8rem;display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--line);
+    padding:5px 10px;border-radius:999px;cursor:pointer}
+  .month{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .mtitle{font-size:1rem;font-weight:700;margin:0 0 8px 4px}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .dow{text-align:center;font-size:.72rem;color:var(--sub);padding:2px 0;font-weight:600}
+  .dow.sun{color:#d23b3b}.dow.sat{color:#2f6fb5}
+  .cell{min-height:62px;border:1px solid #eef2f6;border-radius:8px;padding:3px 3px 4px;background:#fff;display:flex;flex-direction:column;gap:3px}
+  .cell.wend{background:var(--wend)}
+  .cell.empty{background:transparent;border:none}
+  .cell.today{background:var(--today);border-color:#e8c95a}
+  .dnum{font-size:.74rem;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .dnum .wd{color:var(--sub);font-size:.66rem;margin-left:1px}
+  .dnum.sun{color:#d23b3b}.dnum.sat{color:#2f6fb5}
+  .chips{display:flex;flex-wrap:wrap;gap:2px;margin-top:auto}
+  .foot{font-size:.74rem;color:var(--sub);margin-top:10px;text-align:center;line-height:1.8}
+  .foot a{color:var(--tac)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🏊 プール休館日カレンダー</h1>
+  <div class="upd">最終更新：2026/6/17（公式サイトより取得）</div>
+  <div class="legend">
+    <span class="lg"><span class="chip c-tac">ア</span>東京アクアティクス</span>
+    <span class="lg"><span class="chip c-yoko">横</span>横浜国際</span>
+    <span class="lg"><span class="chip c-zen">善</span>善行(県立SC)・休館</span>
+    <span class="lg"><span class="chip c-zen part">善</span>善行・一部休止</span>
+  </div>
+  <div class="note">
+    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は3館とも営業。点線の「善」は<b>一部時間帯のみ休止</b>（チップにマウスを乗せると時間表示）。
+  </div>
+  <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
+    <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b>9/24(木)まで</b>。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
+  </div>
+  <div class="controls">
+    <label><input type="checkbox" id="ck-tac" checked> アクア</label>
+    <label><input type="checkbox" id="ck-yoko" checked> 横浜国際</label>
+    <label><input type="checkbox" id="ck-zen" checked> 善行</label>
+  </div>
+  <div id="cal"></div>
+  <div class="foot">
+    出典（公式）：
+    <a href="https://www.tef.or.jp/tac/closure.html" target="_blank" rel="noopener">アクア休館日</a>・
+    <a href="https://yokohama-sport.jp/waterarena/schedule/" target="_blank" rel="noopener">横浜国際スケジュール</a>・
+    <a href="https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html" target="_blank" rel="noopener">善行 利用休止</a><br>
+    表示範囲：2026年6月〜2027年3月
+  </div>
+</div>
+
+<script>
+// ===== 確定：東京アクアティクス（プール影響日のみ／公式表）=====
+const TAC = {
+ "2026-07-21":"全館休館","2026-08-17":"全館休館","2026-09-07":"全館休館","2026-10-19":"全館休館",
+ "2026-11-07":"メイン・ダイビング休館","2026-11-08":"メイン・ダイビング休館","2026-11-09":"メイン・ダイビング休館","2026-11-10":"メイン・ダイビング休館",
+ "2026-11-11":"全館休館","2026-11-12":"全館休館","2026-11-13":"全館休館","2026-11-14":"全館休館","2026-11-15":"全館休館","2026-11-16":"全館休館",
+ "2026-11-17":"全館休館","2026-11-18":"全館休館","2026-11-19":"全館休館","2026-11-20":"全館休館",
+ "2026-11-21":"サブ休館","2026-11-22":"サブ休館","2026-11-23":"サブ休館","2026-11-24":"サブ休館","2026-11-25":"サブ休館","2026-11-26":"サブ休館","2026-11-27":"サブ休館",
+ "2026-12-07":"全館休館","2026-12-29":"メイン休館","2026-12-30":"全館休館","2026-12-31":"全館休館",
+ "2027-01-01":"全館休館","2027-01-02":"全館休館","2027-01-03":"全館休館","2027-01-18":"全館休館",
+ "2027-02-15":"全館休館","2027-02-16":"全館休館","2027-03-15":"全館休館"
+};
+// ===== 確定：横浜国際（公式チラシ）。9/24まで確定、10月以降は未発表 =====
+const YOKO = { "2026-06-16":"休館日", "2026-09-24":"休館日" };
+// ===== 確定：善行 一部利用休止（公式「利用休止」ページ）=====
+const ZEN_PART = {
+ "2026-06-17":"16:00-21:00 利用休止","2026-06-18":"9:00-21:00 利用休止",
+ "2026-08-02":"9:00-18:00 利用休止","2026-08-16":"13:00-21:00 利用休止",
+ "2026-08-28":"16:00-18:00 利用休止","2026-08-29":"16:00-18:00 利用休止","2026-08-30":"16:00-18:00 利用休止",
+ "2026-09-06":"9:00-18:00 利用休止","2026-09-08":"16:00-18:00 利用休止",
+ "2026-10-03":"9:00-18:00 利用休止","2026-10-14":"9:00-17:00 利用休止","2026-10-15":"9:00-17:00 利用休止"
+};
+
+// ===== 祝日（範囲内）＋日曜なら振替 =====
+const baseHoliday=["2026-07-20","2026-08-11","2026-09-21","2026-09-22","2026-09-23",
+ "2026-10-12","2026-11-03","2026-11-23","2027-01-01","2027-01-11","2027-02-11","2027-02-23","2027-03-21"];
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+const HOLIDAY=new Set(baseHoliday);
+baseHoliday.forEach(h=>{const d=new Date(h+"T00:00:00");if(d.getDay()===0){let n=new Date(d);do{n=new Date(n.getTime()+864e5);}while(HOLIDAY.has(iso(n)));HOLIDAY.add(iso(n));}});
+// ===== 善行 全日休館（公式ルール：毎週月曜＋祝日翌日＋年末年始、祝日の月曜は翌平日へ）=====
+const ZEN=new Set();
+(function(){
+  let d=new Date("2026-06-01T00:00:00"), end=new Date("2027-03-31T00:00:00");
+  for(;d<=end;d=new Date(d.getTime()+864e5)){
+    const s=iso(d), wd=d.getDay();
+    if((d.getMonth()===11&&d.getDate()>=29)||(d.getMonth()===0&&d.getDate()<=3)){ZEN.add(s);continue;}
+    if(wd===1){
+      if(!HOLIDAY.has(s)){ZEN.add(s);}
+      else{ let n=new Date(d.getTime()+864e5); while(HOLIDAY.has(iso(n))||n.getDay()===0||n.getDay()===6){n=new Date(n.getTime()+864e5);} ZEN.add(iso(n)); }
+    }
+    const prev=new Date(d.getTime()-864e5);
+    if(HOLIDAY.has(iso(prev)) && wd!==0 && wd!==6 && !HOLIDAY.has(s)){ZEN.add(s);}
+  }
+})();
+
+const W=["日","月","火","水","木","金","土"];
+const now=new Date(); const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})); const TODAY=iso(jst);
+
+function chip(cls,label,title){return '<span class="chip '+cls+'" title="'+title+'">'+label+'</span>';}
+function ck(id){return document.getElementById(id).checked;}
+function build(){
+  const show={tac:ck('ck-tac'),yoko:ck('ck-yoko'),zen:ck('ck-zen')};
+  let html="";
+  for(let y=2026,m=6;!(y===2027&&m===4);){
+    html+='<div class="month"><div class="mtitle">'+y+'年 '+m+'月</div><div class="grid">';
+    for(let i=0;i<7;i++){html+='<div class="dow '+(i===0?'sun':i===6?'sat':'')+'">'+W[i]+'</div>';}
+    const first=new Date(y,m-1,1); const start=first.getDay(); const dim=new Date(y,m,0).getDate();
+    for(let i=0;i<start;i++)html+='<div class="cell empty"></div>';
+    for(let day=1;day<=dim;day++){
+      const d=new Date(y,m-1,day); const s=iso(d); const wd=d.getDay();
+      let cls="cell"; if(wd===0||wd===6)cls+=" wend"; if(s===TODAY)cls+=" today";
+      let chips="";
+      if(show.tac&&TAC[s]) chips+=chip("c-tac","ア","アクア："+TAC[s]);
+      if(show.yoko&&YOKO[s]) chips+=chip("c-yoko","横","横浜国際："+YOKO[s]);
+      if(show.zen&&ZEN.has(s)) chips+=chip("c-zen","善","善行：休館（月曜/祝日翌日/年末年始）");
+      else if(show.zen&&ZEN_PART[s]) chips+=chip("c-zen part","善","善行："+ZEN_PART[s]);
+      html+='<div class="'+cls+'"><div class="dnum '+(wd===0?'sun':wd===6?'sat':'')+'">'+day+'<span class="wd">'+W[wd]+'</span></div><div class="chips">'+chips+'</div></div>';
+    }
+    html+='</div></div>';
+    m++; if(m>12){m=1;y++;}
+  }
+  document.getElementById("cal").innerHTML=html;
+}
+["ck-tac","ck-yoko","ck-zen"].forEach(id=>document.getElementById(id).addEventListener("change",build));
+build();
+</script>
+</body>
+</html>
