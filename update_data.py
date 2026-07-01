@@ -2,20 +2,48 @@
 # -*- coding: utf-8 -*-
 """
 プール休館日カレンダー データ自動更新スクリプト（GitHub Actions用）
-3つの公式ソースを取得・解析し、index.html の ===DATA-START=== 〜 ===DATA-END===
-の間（TAC / YOKO / ZEN_PART / LAST_UPDATED）を書き換える。
-取得や解析に失敗したソースは既存値を保持し、推測で埋めない。
+
+各プールの公式ソースを取得・解析し、index.html の
+===DATA-START=== 〜 ===DATA-END=== の間（LAST_UPDATED / DATA）だけを書き換える。
+
+DATA は JSON 互換の 1 オブジェクトで、プール id ごとに
+{ "<pool_id>": {"closed": {"YYYY-MM-DD": "ラベル"}, "partial": {...}} } を持つ。
+  - closed  … 全日休館（実線チップ）
+  - partial … 一部時間帯のみ休止（点線チップ）
+静的なプール定義（名前・色・チップ文字・ルール等）は index.html の POOLS 配列側にあり、
+このスクリプトは触らない。取得や解析に失敗したソースは既存値を保持し、推測で埋めない。
+
+新しいプールを足すとき:
+  1. index.html の POOLS に定義を追加（id・名前・色・short 等）
+  2. このファイルの POOLS に {"id", "kind", "parser", "url"} を追加
+  3. 必要なら新しいソース型の parser 関数を書いて DISPATCH に登録
 """
 import re, sys, json, datetime, unicodedata, os
 
 RANGE_START = "2026-06-01"
 RANGE_END   = "2027-03-31"
 INDEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+JST   = datetime.timezone(datetime.timedelta(hours=9))
+
+# ---- スクレイピング対象プール（id は index.html の POOLS と対応）----
+# kind: "closed"（全日休館）/ "partial"（一部休止）… パーサ結果を書き込む先
+# parser: 下の DISPATCH のキー
+POOLS = [
+    {"id": "tac",  "kind": "closed",  "parser": "tac",
+     "url": "https://www.tef.or.jp/tac/closure.html"},
+    {"id": "yoko", "kind": "closed",  "parser": "yokohama",
+     "url": "https://yokohama-sport.jp/waterarena/schedule/"},
+    {"id": "zen",  "kind": "partial", "parser": "zengyo_partial",
+     "url": "https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"},
+]
 
 def z2h(s):
     return unicodedata.normalize("NFKC", s)
 
-# ---------- 東京アクアティクス ----------
+def in_range(iso):
+    return RANGE_START <= iso <= RANGE_END
+
+# ---------- 東京アクアティクス：確定表(HTML) ----------
 def parse_tac(html):
     """HTML/テキストから プール影響の休館日 を {YYYY-MM-DD: ラベル} で返す"""
     text = re.sub(r"<[^>]+>", " ", html)          # タグ除去
@@ -29,7 +57,7 @@ def parse_tac(html):
         if not re.search(r"全館|メインプール|サブプール|ダイビングプール", body):
             continue
         iso = f"{int(y):04d}-{int(m):02d}-{int(d):02d}"
-        if iso < RANGE_START or iso > RANGE_END:
+        if not in_range(iso):
             continue
         if "全館" in body:
             label = "全館休館"
@@ -51,7 +79,7 @@ def parse_zengyo_partial(html):
     for r_, m, d, h1, h2 in pat.findall(text):
         y = 2018 + int(r_)
         iso = f"{y:04d}-{int(m):02d}-{int(d):02d}"
-        if iso < RANGE_START or iso > RANGE_END:
+        if not in_range(iso):
             continue
         out[iso] = f"{int(h1)}:00-{int(h2)}:00 利用休止"
     return out
@@ -77,89 +105,112 @@ def parse_yokohama_text(pdf_text):
         for m, d in re.findall(r"(\d{1,2})月(\d{1,2})日\([日月火水木金土]\)", seg):
             out[to_iso(int(m), int(d))] = "休館日"
     # 範囲内のみ
-    return {k: v for k, v in out.items() if RANGE_START <= k <= RANGE_END}
+    return {k: v for k, v in out.items() if in_range(k)}
+
+# ---------- ソース型ディスパッチ ----------
+# 各 source_* は (pool, ctx, cur) を受け取り {YYYY-MM-DD: ラベル} を返す。
+#   ctx.get / ctx.gettext … HTTP ヘルパ、ctx.pdfplumber … PDF ライブラリ（無ければ None）
+#   cur … 既存値（フォールバックや累積マージ用）
+
+def source_tac(pool, ctx, cur):
+    return parse_tac(ctx.gettext(pool["url"]))
+
+def source_zengyo_partial(pool, ctx, cur):
+    return parse_zengyo_partial(ctx.gettext(pool["url"]))
+
+def source_yokohama(pool, ctx, cur):
+    """スケジュールページ→当月/翌月チラシPDF。既存値に上書きマージし、過去日を掃除。"""
+    import io
+    out = dict(cur)
+    sched = ctx.gettext(pool["url"])
+    pdfs = re.findall(r'href="([^"]+\.pdf)"', sched)
+    pdfs = [p if p.startswith("http") else ("https://yokohama-sport.jp" + p) for p in pdfs]
+    seen = set()
+    for url in pdfs[:4]:
+        if url in seen or ctx.pdfplumber is None:
+            continue
+        seen.add(url)
+        data = ctx.get(url).content
+        with ctx.pdfplumber.open(io.BytesIO(data)) as pdf:
+            txt = "\n".join((pg.extract_text() or "") for pg in pdf.pages)
+        out.update(parse_yokohama_text(txt))
+    # 過去日を掃除（今日より前は落とす。ただし既存値にあったものは残す）
+    today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
+    out = {k: v for k, v in out.items() if k >= today or k in cur}
+    return out
+
+DISPATCH = {
+    "tac": source_tac,
+    "zengyo_partial": source_zengyo_partial,
+    "yokohama": source_yokohama,
+}
 
 # ---------- index.html 書き換え ----------
-def js_dict(d):
-    items = ",\n ".join(f'"{k}":"{v}"' for k, v in sorted(d.items()))
-    return "{\n " + items + "\n}" if d else "{}"
-
-def build_block(tac, yoko, zen_part, updated):
+def build_block(data, updated):
+    body = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True)
     return (
         "// ===DATA-START（GitHub Actionsが自動生成。手で編集しない）===\n"
         f'const LAST_UPDATED = "{updated}";\n'
-        "// 確定：東京アクアティクス（プール影響日のみ／公式表）\n"
-        f"const TAC = {js_dict(tac)};\n"
-        "// 確定：横浜国際（公式チラシ）。10月以降は未発表\n"
-        f"const YOKO = {js_dict(yoko)};\n"
-        "// 確定：善行 一部利用休止（公式「利用休止」ページ）\n"
-        f"const ZEN_PART = {js_dict(zen_part)};\n"
+        "// プール id ごとの休館データ（closed=全日休館 / partial=一部休止）。定義は POOLS 側。\n"
+        f"const DATA = {body};\n"
         "// ===DATA-END==="
     )
 
 def extract_existing(html):
-    """既存の TAC/YOKO/ZEN_PART を読み出す（フォールバック用）"""
-    def grab(name):
-        m = re.search(name + r"\s*=\s*(\{.*?\})\s*;", html, re.S)
-        if not m:
-            return {}
-        body = m.group(1)
-        return dict(re.findall(r'"([0-9\-]+)"\s*:\s*"([^"]*)"', body))
-    return grab("TAC"), grab("YOKO"), grab("ZEN_PART")
+    """既存の DATA オブジェクトを読み出す（フォールバック用）。壊れていれば空。"""
+    m = re.search(r"const DATA\s*=\s*(\{.*?\})\s*;", html, re.S)
+    if not m:
+        return {}
+    try:
+        return json.loads(m.group(1))
+    except Exception as e:
+        print("DATA parse failed:", e)
+        return {}
+
+class Ctx:
+    def __init__(self):
+        import requests
+        try:
+            import pdfplumber
+        except Exception:
+            pdfplumber = None
+        self.requests = requests
+        self.pdfplumber = pdfplumber
+        self._ua = {"User-Agent": "Mozilla/5.0 (pool-calendar updater)"}
+
+    def get(self, url, **kw):
+        return self.requests.get(url, headers=self._ua, timeout=30, **kw)
+
+    def gettext(self, url):
+        r = self.get(url)
+        r.encoding = "utf-8"   # charset未指定ページの文字化け対策
+        return r.text
 
 def main():
-    import requests
-    try:
-        import pdfplumber
-    except Exception:
-        pdfplumber = None
-    UA = {"User-Agent": "Mozilla/5.0 (pool-calendar updater)"}
-    def get(url, **kw):
-        return requests.get(url, headers=UA, timeout=30, **kw)
-    def gettext(url):
-        r = get(url); r.encoding = "utf-8"; return r.text  # charset未指定ページの文字化け対策
+    ctx = Ctx()
 
     with open(INDEX, encoding="utf-8") as f:
         html = f.read()
-    cur_tac, cur_yoko, cur_zen = extract_existing(html)
+    existing = extract_existing(html)
 
-    # TAC
-    try:
-        tac = parse_tac(gettext("https://www.tef.or.jp/tac/closure.html"))
-        if not tac: raise ValueError("empty")
-    except Exception as e:
-        print("TAC failed, keep existing:", e); tac = cur_tac
+    data = {}
+    for pool in POOLS:
+        pid, kind = pool["id"], pool["kind"]
+        cur = existing.get(pid, {}).get(kind, {})
+        try:
+            parsed = DISPATCH[pool["parser"]](pool, ctx, cur)
+            if not parsed:
+                raise ValueError("empty")
+        except Exception as e:
+            print(f"{pid}/{kind} failed, keep existing:", e)
+            parsed = cur
+        # 既存の他 kind（あれば）も温存しつつ、今回の kind を差し替え
+        entry = dict(existing.get(pid, {}))
+        entry[kind] = parsed
+        data[pid] = entry
 
-    # 善行 一部休止
-    try:
-        zp = parse_zengyo_partial(gettext("https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"))
-        if not zp: raise ValueError("empty")
-    except Exception as e:
-        print("ZEN_PART failed, keep existing:", e); zp = cur_zen
-
-    # 横浜国際（スケジュールページ→当月/翌月PDF）
-    yoko = dict(cur_yoko)
-    try:
-        sched = gettext("https://yokohama-sport.jp/waterarena/schedule/")
-        pdfs = re.findall(r'href="([^"]+\.pdf)"', sched)
-        pdfs = [p if p.startswith("http") else ("https://yokohama-sport.jp"+p) for p in pdfs]
-        seen = set()
-        for url in pdfs[:4]:
-            if url in seen or pdfplumber is None: continue
-            seen.add(url)
-            import io
-            data = get(url).content
-            with pdfplumber.open(io.BytesIO(data)) as pdf:
-                txt = "\n".join((pg.extract_text() or "") for pg in pdf.pages)
-            yoko.update(parse_yokohama_text(txt))
-    except Exception as e:
-        print("YOKO failed, keep existing:", e)
-    # 過去日を掃除（今日より前は落とす）
-    today = (datetime.datetime.utcnow()+datetime.timedelta(hours=9)).strftime("%Y-%m-%d")
-    yoko = {k:v for k,v in yoko.items() if k >= today or k in cur_yoko}
-
-    updated = (datetime.datetime.utcnow()+datetime.timedelta(hours=9)).strftime("%Y/%-m/%-d")
-    new_block = build_block(tac, yoko, zp, updated)
+    updated = datetime.datetime.now(JST).strftime("%Y/%-m/%-d")
+    new_block = build_block(data, updated)
     new_html = re.sub(r"// ===DATA-START.*?// ===DATA-END===", new_block, html, flags=re.S)
     if new_html != html:
         with open(INDEX, "w", encoding="utf-8") as f:
