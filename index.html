@@ -69,7 +69,12 @@
     <a href="https://www.yamato-zaidan.or.jp/z_new/zaidan_hikichidai_p.php" target="_blank" rel="noopener">引地台</a>・
     <a href="https://www.se-sports.or.jp/facility/sougou-p/" target="_blank" rel="noopener">世田谷</a>・
     <a href="https://shisetsu.mizuno.jp/m-7610-2/guide" target="_blank" rel="noopener">代官山</a>・
-    <a href="https://www.tama-pool.org/informations/time/" target="_blank" rel="noopener">アクアブルー多摩</a><br>
+    <a href="https://www.tama-pool.org/informations/time/" target="_blank" rel="noopener">アクアブルー多摩</a>・
+    <a href="https://www.tsudukipool-yps.com/guide.html" target="_blank" rel="noopener">都筑</a>・
+    <a href="https://www.city.koto.lg.jp/104010/shisetsuannai/kokyo/sportsshisetsu/taikukan/14017.html" target="_blank" rel="noopener">東砂</a>・
+    <a href="https://www.city.ebina.kanagawa.jp/guide/bunka/sports/1003664.html" target="_blank" rel="noopener">北部公園</a>・
+    <a href="https://www.green-pool.jp/" target="_blank" rel="noopener">相模原</a>・
+    <a href="https://www.city.meguro.tokyo.jp/sports/bunkasports/sports/indoorpool_nittei.html" target="_blank" rel="noopener">目黒</a><br>
     休館日は変更される場合があります。最新・正確な情報は各公式サイトでご確認ください。<br>
     表示範囲：2026年6月〜2027年3月
   </div>
@@ -141,6 +146,20 @@ const DATA = {
    "2027-02-25": "休場",
    "2027-02-26": "休場",
    "2027-03-15": "休場"
+  }
+ },
+ "meguro": {
+  "closed": {
+   "2026-07-06": "臨時休場",
+   "2026-07-07": "臨時休場",
+   "2026-07-08": "臨時休場",
+   "2026-07-09": "臨時休場"
+  },
+  "partial": {
+   "2026-06-08": "9:00-12:00 利用不可",
+   "2026-06-09": "9:00-12:00 利用不可",
+   "2026-06-10": "9:00-13:00 利用不可",
+   "2026-06-12": "9:00-13:00 利用不可"
   }
  },
  "musashino": {
@@ -257,6 +276,18 @@ const POOLS=[
    rule:"daikanyama", ruleLabel:"休館（毎月第2・第4月曜＋年末年始）"},
  {id:"tama", name:"アクアブルー多摩(多摩市)", ctrl:"多摩", short:"多", color:"#2aa5c9",
    rule:"tama", ruleLabel:"プール休場（毎週火曜／7月は第1・2火・8月なし＋年末年始）"},
+ // --- 2026-07 追加：条件付き5件（4件は公式ルールを生成／目黒はHTML表を自動取得）---
+ {id:"tsuzuki", name:"都筑プール(横浜市)", ctrl:"都筑", short:"都", color:"#3949ab",
+   rule:"tsuzuki", ruleLabel:"休館（毎月最終火曜／7・8月は無休＋年末年始）"},
+ {id:"higashisuna", name:"東砂スポーツセンター(江東区)", ctrl:"東砂", short:"東", color:"#ad1457",
+   rule:"higashisuna", ruleLabel:"休館（毎月第2・第4月曜＋年末年始）"},
+ {id:"hokubu", name:"北部公園屋内プール(海老名市)", ctrl:"北部公園", short:"北", color:"#689f38",
+   rule:"hokubu", ruleLabel:"休館（毎月第2水曜＋年末年始）※長期休館は別途"},
+ {id:"sagamihara", name:"相模原グリーンプール", ctrl:"相模原", short:"相", color:"#f4511e",
+   rule:"sagamihara", ruleLabel:"休館（毎月第2・第4月曜／祝日は営業）"},
+ // 目黒：year-endはルール、臨時/部分休館は区公式HTML表を update_data.py が自動取得
+ {id:"meguro", name:"目黒区民センター屋内プール", ctrl:"目黒", short:"目", color:"#455a64",
+   rule:"meguro", ruleLabel:"休館（12/28-1/4）"},
 ];
 // DATA（自動生成部）を各プールに紐付け
 POOLS.forEach(p=>{ const d=DATA[p.id]||{}; p.closed=d.closed||{}; p.partial=d.partial||{}; p.show=true; });
@@ -378,8 +409,59 @@ function ruleMusashino(){
   eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
   return set;
 }
-const RULES={zengyo:ruleZengyo, hikichidai:ruleHikichidai, setagaya:ruleSetagaya,
-  daikanyama:ruleDaikanyama, tama:ruleTama, musashino:ruleMusashino};
+function lastWeekday(y,m,weekday){ // m=1-12。その月の最後の weekday のDate
+  let d=new Date(y,m,0); // 月末
+  while(d.getDay()!==weekday) d=new Date(d.getTime()-864e5);
+  return d;
+}
+// 毎月第n月曜の共通ルール。holidayOpen=true なら祝日と重なる回は休まない（相模原）、
+// false なら祝日→直後の平日へ振替（代官山/東砂）。いずれも年末年始(12/29-1/3)を含む。
+function nthMondayRule(ns, holidayOpen){
+  const set=new Set();
+  eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
+  eachMonthInRange(function(y,m){
+    ns.forEach(function(n){
+      const mon=nthWeekday(y,m,1,n); if(!mon) return;
+      if(holidayOpen){ if(!HOLIDAY.has(iso(mon))) set.add(iso(mon)); }
+      else { const s=afterHolidayWeekday(mon); if(s>=RANGE_START&&s<=RANGE_END) set.add(s); }
+    });
+  });
+  return set;
+}
+// 都筑：毎月最終火曜（7・8月は無休）＋年末年始(12/29-1/3)
+function ruleTsuzuki(){
+  const set=new Set();
+  eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
+  eachMonthInRange(function(y,m){
+    if(m===7||m===8) return;
+    const t=lastWeekday(y,m,2), s=iso(t);
+    if(s>=RANGE_START&&s<=RANGE_END) set.add(s);
+  });
+  return set;
+}
+// 北部公園(海老名)：毎月第2水曜＋年末年始。※施設修繕等の長期休館は別途（PDF/要OCR、未反映）
+function ruleHokubu(){
+  const set=new Set();
+  eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
+  eachMonthInRange(function(y,m){
+    const w=nthWeekday(y,m,3,2); if(!w) return; // 3=水曜, 第2
+    const s=iso(w); if(s>=RANGE_START&&s<=RANGE_END) set.add(s);
+  });
+  return set;
+}
+// 目黒：year-end 12/28-1/4（臨時/部分休館は DATA=区公式表から自動取得）
+function ruleMeguro(){
+  const set=new Set();
+  eachDay(function(d,s){ const mo=d.getMonth(),da=d.getDate(); if((mo===11&&da>=28)||(mo===0&&da<=4)) set.add(s); });
+  return set;
+}
+const RULES={
+  zengyo:ruleZengyo, hikichidai:ruleHikichidai, setagaya:ruleSetagaya,
+  daikanyama:ruleDaikanyama, tama:ruleTama, musashino:ruleMusashino,
+  tsuzuki:ruleTsuzuki, hokubu:ruleHokubu, meguro:ruleMeguro,
+  higashisuna:function(){ return nthMondayRule([2,4], false); },  // 祝日→直後平日
+  sagamihara: function(){ return nthMondayRule([2,4], true); }    // 祝日は営業
+};
 POOLS.forEach(p=>{ p.ruleSet=(p.rule&&RULES[p.rule])?RULES[p.rule]():new Set(); });
 
 const now=new Date(); const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})); const TODAY=iso(jst);

@@ -37,6 +37,9 @@ POOLS = [
      "url": "https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"},
     {"id": "chiba", "kind": "closed", "parser": "chiba",
      "url": "https://www.chiba-swim.gr.jp/"},
+    # 目黒：区公式「今後の予定表」HTML表から目黒区民センター行を取得（closed=全日/partial=時間限定）
+    {"id": "meguro", "kind": "both", "parser": "meguro",
+     "url": "https://www.city.meguro.tokyo.jp/sports/bunkasports/sports/indoorpool_nittei.html"},
 ]
 
 # スクレイプ対象外だが index.html の DATA に手動反映しているプール（上書き/削除しない）。
@@ -194,11 +197,72 @@ def source_chiba(pool, ctx, cur):
         txt = "\n".join((pg.extract_text() or "") for pg in p.pages)
     return parse_chiba_text(txt)
 
+# ---------- 目黒区民センター：区公式「今後の予定表」HTML表 ----------
+def parse_meguro_cell(cell):
+    """目黒区民センター行のセル文言を {closed:{iso:label}, partial:{iso:label}} に。
+    例: "6月8日(月)・9日(火)9:00から12:00 6月10日(水)・12日(金)9:00から13:00 7月6日(月)から9日(木)"
+    時間付き=部分休館(partial)、時間なし=全日休場(closed)、「から」で日付範囲は展開。推測で埋めない。"""
+    t = z2h(cell)
+    now = datetime.datetime.now(JST)
+    fy = now.year if now.month >= 4 else now.year - 1   # 年度開始年
+    def yof(m): return fy if m >= 4 else fy + 1
+    closed, partial = {}, {}
+    # エントリは "M月D日(" の直前で分割（後続の "D日(" は月が無いので割れない）
+    for e in re.split(r"(?=\d{1,2}月\d{1,2}日\()", t):
+        e = e.strip()
+        if not re.match(r"\d{1,2}月\d{1,2}日", e):
+            continue
+        month = int(re.match(r"(\d{1,2})月", e).group(1))
+        tm = re.search(r"(\d{1,2}):(\d{2})から(\d{1,2}):(\d{2})", e)   # 時間帯（=部分休館）
+        label_time = None
+        core = e
+        if tm:
+            label_time = f"{int(tm.group(1))}:{tm.group(2)}-{int(tm.group(3))}:{tm.group(4)} 利用不可"
+            core = e[:tm.start()]
+        rng = re.search(r"(\d{1,2})月(\d{1,2})日\([^)]*\)から(?:(\d{1,2})月)?(\d{1,2})日", core)
+        dts = []
+        if rng:
+            m1, d1 = int(rng.group(1)), int(rng.group(2))
+            m2, d2 = int(rng.group(3) or rng.group(1)), int(rng.group(4))
+            cur = datetime.date(yof(m1), m1, d1)
+            end = datetime.date(yof(m2), m2, d2)
+            while cur <= end:
+                dts.append(cur); cur += datetime.timedelta(days=1)
+        else:
+            first = re.match(r"(\d{1,2})月(\d{1,2})日", core)
+            if first:
+                dts.append(datetime.date(yof(int(first.group(1))), int(first.group(1)), int(first.group(2))))
+            for dm in re.findall(r"・(\d{1,2})日", core):   # ・で並ぶ2つ目以降は月を継承
+                dts.append(datetime.date(yof(month), month, int(dm)))
+        for dt in dts:
+            iso = dt.strftime("%Y-%m-%d")
+            if not in_range(iso):
+                continue
+            if label_time:
+                partial[iso] = label_time
+            else:
+                closed[iso] = "臨時休場"
+    return {"closed": closed, "partial": partial}
+
+def source_meguro(pool, ctx, cur):
+    html = ctx.gettext(pool["url"])
+    tbl = re.search(r"<table[\s\S]*?</table>", html)
+    if not tbl:
+        raise ValueError("予定表テーブルが見つからない")
+    for tr in re.findall(r"<tr[\s\S]*?</tr>", tbl.group(0)):
+        cells = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", c).replace("&nbsp;", " ")).strip()
+                 for c in re.findall(r"<t[dh][\s\S]*?</t[dh]>", tr)]
+        cells = [c for c in cells if c]
+        if cells and "目黒区民センター" in cells[0] and len(cells) >= 2:
+            return parse_meguro_cell(cells[1])
+    raise ValueError("目黒区民センター行が見つからない")
+
 DISPATCH = {
     "tac": source_tac,
     "zengyo_partial": source_zengyo_partial,
     "yokohama": source_yokohama,
     "chiba": source_chiba,
+    "meguro": source_meguro,
 }
 
 # ---------- index.html 書き換え ----------
@@ -253,6 +317,20 @@ def main():
     data = dict(existing)
     for pool in POOLS:
         pid, kind = pool["id"], pool["kind"]
+        if kind == "both":
+            cur = existing.get(pid, {})
+            try:
+                parsed = DISPATCH[pool["parser"]](pool, ctx, cur)
+                if not (parsed.get("closed") or parsed.get("partial")):
+                    raise ValueError("empty")
+            except Exception as e:
+                print(f"{pid}/both failed, keep existing:", e)
+                parsed = {"closed": cur.get("closed", {}), "partial": cur.get("partial", {})}
+            entry = dict(existing.get(pid, {}))
+            entry["closed"] = parsed.get("closed", {})
+            entry["partial"] = parsed.get("partial", {})
+            data[pid] = entry
+            continue
         cur = existing.get(pid, {}).get(kind, {})
         try:
             parsed = DISPATCH[pool["parser"]](pool, ctx, cur)
