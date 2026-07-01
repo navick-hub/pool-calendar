@@ -51,7 +51,7 @@
   <div class="upd" id="upd">最終更新：2026/6/17（公式サイトより取得）</div>
   <div class="legend" id="legend"></div>
   <div class="note">
-    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は3館とも営業。点線の「善」は<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。
+    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は各館とも営業。<b>点線</b>のチップは<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。上のボタンで館ごとに表示を絞り込めます。
   </div>
   <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
     <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b id="yoko-max">9/24(木)</b>まで。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
@@ -61,9 +61,16 @@
   <div id="toast"></div>
   <div class="foot">
     出典（公式）：
-    <a href="https://www.tef.or.jp/tac/closure.html" target="_blank" rel="noopener">アクア休館日</a>・
-    <a href="https://yokohama-sport.jp/waterarena/schedule/" target="_blank" rel="noopener">横浜国際スケジュール</a>・
-    <a href="https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html" target="_blank" rel="noopener">善行 利用休止</a><br>
+    <a href="https://www.tef.or.jp/tac/closure.html" target="_blank" rel="noopener">東京アクア</a>・
+    <a href="https://yokohama-sport.jp/waterarena/schedule/" target="_blank" rel="noopener">横浜国際</a>・
+    <a href="https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html" target="_blank" rel="noopener">善行</a>・
+    <a href="https://www.chiba-swim.gr.jp/" target="_blank" rel="noopener">千葉県国際</a>・
+    <a href="https://www.musashino.or.jp/sports/1001575/1003508.html" target="_blank" rel="noopener">武蔵野</a>・
+    <a href="https://www.yamato-zaidan.or.jp/z_new/zaidan_hikichidai_p.php" target="_blank" rel="noopener">引地台</a>・
+    <a href="https://www.se-sports.or.jp/facility/sougou-p/" target="_blank" rel="noopener">世田谷</a>・
+    <a href="https://shisetsu.mizuno.jp/m-7610-2/guide" target="_blank" rel="noopener">代官山</a>・
+    <a href="https://www.tama-pool.org/informations/time/" target="_blank" rel="noopener">アクアブルー多摩</a><br>
+    休館日は変更される場合があります。最新・正確な情報は各公式サイトでご確認ください。<br>
     表示範囲：2026年6月〜2027年3月
   </div>
 </div>
@@ -73,6 +80,92 @@
 const LAST_UPDATED = "2026/7/1";
 // プール id ごとの休館データ（closed=全日休館 / partial=一部休止）。定義は POOLS 側。
 const DATA = {
+ "chiba": {
+  "closed": {
+   "2026-06-08": "休場",
+   "2026-07-13": "休場",
+   "2026-08-17": "休場",
+   "2026-09-14": "休場",
+   "2026-10-19": "休場",
+   "2026-11-04": "休場",
+   "2026-11-05": "休場",
+   "2026-11-06": "休場",
+   "2026-11-07": "休場",
+   "2026-11-08": "休場",
+   "2026-11-09": "休場",
+   "2026-11-10": "休場",
+   "2026-11-11": "休場",
+   "2026-11-12": "休場",
+   "2026-11-13": "休場",
+   "2026-11-14": "休場",
+   "2026-11-15": "休場",
+   "2026-11-16": "休場",
+   "2026-11-17": "休場",
+   "2026-11-18": "休場",
+   "2026-11-19": "休場",
+   "2026-11-20": "休場",
+   "2026-12-14": "休場",
+   "2026-12-28": "休場",
+   "2026-12-29": "休場",
+   "2026-12-30": "休場",
+   "2026-12-31": "休場",
+   "2027-01-01": "休場",
+   "2027-01-02": "休場",
+   "2027-01-03": "休場",
+   "2027-01-04": "休場",
+   "2027-01-18": "休場",
+   "2027-02-01": "休場",
+   "2027-02-02": "休場",
+   "2027-02-03": "休場",
+   "2027-02-04": "休場",
+   "2027-02-05": "休場",
+   "2027-02-06": "休場",
+   "2027-02-07": "休場",
+   "2027-02-08": "休場",
+   "2027-02-09": "休場",
+   "2027-02-10": "休場",
+   "2027-02-11": "休場",
+   "2027-02-12": "休場",
+   "2027-02-13": "休場",
+   "2027-02-14": "休場",
+   "2027-02-15": "休場",
+   "2027-02-16": "休場",
+   "2027-02-17": "休場",
+   "2027-02-18": "休場",
+   "2027-02-19": "休場",
+   "2027-02-20": "休場",
+   "2027-02-21": "休場",
+   "2027-02-22": "休場",
+   "2027-02-23": "休場",
+   "2027-02-24": "休場",
+   "2027-02-25": "休場",
+   "2027-02-26": "休場",
+   "2027-03-15": "休場"
+  }
+ },
+ "musashino": {
+  "closed": {
+   "2026-06-16": "プール臨時休場(水入替)",
+   "2026-06-17": "プール臨時休場(水入替)",
+   "2026-06-18": "プール臨時休場(水入替)",
+   "2026-06-19": "プール臨時休場(水入替)",
+   "2026-09-14": "プール臨時休場(水入替)",
+   "2026-09-15": "プール臨時休場(水入替)",
+   "2026-09-16": "プール臨時休場(水入替)",
+   "2026-09-17": "プール臨時休場(水入替)",
+   "2026-09-18": "プール臨時休場(水入替)",
+   "2027-01-25": "全施設休場(点検整備)",
+   "2027-01-26": "全施設休場(点検整備)",
+   "2027-01-27": "全施設休場(点検整備)",
+   "2027-01-28": "全施設休場(点検整備)",
+   "2027-01-29": "全施設休場(点検整備)"
+  },
+  "partial": {
+   "2026-09-06": "18:00までプール臨時休場",
+   "2026-09-12": "15:00までプール臨時休場",
+   "2026-10-12": "13:00までプール臨時休場"
+  }
+ },
  "tac": {
   "closed": {
    "2026-07-21": "全館休館",
@@ -141,14 +234,29 @@ const DATA = {
 //   color   … チップ色
 //   short   … チップ内の1文字
 //   ctrl    … 絞り込みチェックボックスのラベル
-//   rule    … 全日休館を計算で出すルール名（"zengyo" のみ実装）
+//   rule    … 全日休館を計算で出すルール名（RULES に登録：zengyo/hikichidai/setagaya/daikanyama/tama/musashino）
 //   ruleLabel … ルール休館チップのツールチップ文言
 //   monthly … 月次発表（確定最終日を案内に表示）
+// ※ closed/partial は基本 DATA(自動生成)側。武蔵野のみ臨時休場を DATA に手動反映（年度更新要）。
 const POOLS=[
  {id:"tac",  name:"東京アクアティクス", ctrl:"アクア",   short:"ア", color:"#2f6fb5"},
  {id:"yoko", name:"横浜国際",           ctrl:"横浜国際", short:"横", color:"#1a9e5c", monthly:true},
  {id:"zen",  name:"善行(県立SC)",        ctrl:"善行",     short:"善", color:"#d98324",
    rule:"zengyo", ruleLabel:"休館（月曜/祝日翌日/年末年始）"},
+ // --- 2026-07 追加：確定表PDF型（closedはupdate_data.pyが自動生成）---
+ {id:"chiba", name:"千葉県国際総合水泳場", ctrl:"千葉国際", short:"千", color:"#8e44ad"},
+ // --- 武蔵野：毎月15日ルール＋PDF実読の臨時休場（closed/partialは令和8年度PDFから手動反映・年度更新要）---
+ {id:"musashino", name:"武蔵野総合体育館", ctrl:"武蔵野", short:"武", color:"#c0392b",
+   rule:"musashino", ruleLabel:"休場（毎月15日※7・8月除く＋年末年始）"},
+ // --- 固定ルール型（取得不要・公式掲載の規則をコード生成）---
+ {id:"hikichidai", name:"引地台温水プール(大和市)", ctrl:"引地台", short:"引", color:"#0e7c86",
+   rule:"hikichidai", ruleLabel:"休館（毎週月曜＋年末年始／7/20-8/31は営業）"},
+ {id:"setagaya", name:"世田谷区立総合運動場 温水プール", ctrl:"世田谷", short:"世", color:"#c2185b",
+   rule:"setagaya", ruleLabel:"休館（毎月第3月曜＋年末年始／7月は第2月曜・8月なし）"},
+ {id:"daikanyama", name:"代官山スポーツプラザ", ctrl:"代官山", short:"代", color:"#6d4c41",
+   rule:"daikanyama", ruleLabel:"休館（毎月第2・第4月曜＋年末年始）"},
+ {id:"tama", name:"アクアブルー多摩(多摩市)", ctrl:"多摩", short:"多", color:"#2aa5c9",
+   rule:"tama", ruleLabel:"プール休場（毎週火曜／7月は第1・2火・8月なし＋年末年始）"},
 ];
 // DATA（自動生成部）を各プールに紐付け
 POOLS.forEach(p=>{ const d=DATA[p.id]||{}; p.closed=d.closed||{}; p.partial=d.partial||{}; p.show=true; });
@@ -164,6 +272,27 @@ const HOLIDAY=new Set(baseHoliday);
 baseHoliday.forEach(h=>{const d=new Date(h+"T00:00:00");if(d.getDay()===0){let n=new Date(d);do{n=new Date(n.getTime()+864e5);}while(HOLIDAY.has(iso(n)));HOLIDAY.add(iso(n));}});
 
 // ===== 全日休館を計算で出すルール =====
+// --- 共通ヘルパ ---
+function eachDay(cb){ // 表示範囲内の各日を (Dateオブジェクト, ISO文字列, 曜日番号) で回す
+  let d=new Date(RANGE_START+"T00:00:00"), end=new Date(RANGE_END+"T00:00:00");
+  for(;d<=end;d=new Date(d.getTime()+864e5)) cb(d, iso(d), d.getDay());
+}
+function eachMonthInRange(cb){ // 範囲内の (年, 月[1-12]) を順に
+  [[2026,6],[2026,7],[2026,8],[2026,9],[2026,10],[2026,11],[2026,12],[2027,1],[2027,2],[2027,3]]
+    .forEach(function(ym){ cb(ym[0], ym[1]); });
+}
+function nthWeekday(y,m,weekday,n){ // m=1-12。その月の第n weekday(0=日..6=土) のDate、無ければnull
+  let count=0, d=new Date(y,m-1,1);
+  while(d.getMonth()===m-1){ if(d.getDay()===weekday){ count++; if(count===n) return new Date(d); } d=new Date(d.getTime()+864e5); }
+  return null;
+}
+function afterHolidayWeekday(d){ // d が祝日/土日なら「直後の平日(祝日でない)」へ、そうでなければ d 自身のISO
+  let n=new Date(d);
+  while(HOLIDAY.has(iso(n))||n.getDay()===0||n.getDay()===6){ n=new Date(n.getTime()+864e5); }
+  return iso(n);
+}
+function isYearEnd(d){ const mo=d.getMonth(),da=d.getDate(); return (mo===11&&da>=29)||(mo===0&&da<=3); } // 12/29-1/3
+
 // 善行：毎週月曜＋祝日翌日＋年末年始、祝日の月曜は翌平日へ
 function ruleZengyo(){
   const set=new Set();
@@ -180,7 +309,77 @@ function ruleZengyo(){
   }
   return set;
 }
-const RULES={zengyo:ruleZengyo};
+// 引地台(大和市)：毎週月曜（祝日なら翌日）＋年末年始。7/20〜8/31は月曜も営業
+function ruleHikichidai(){
+  const set=new Set();
+  eachDay(function(d,s,wd){
+    if(isYearEnd(d)){ set.add(s); return; }
+    if(wd!==1) return;
+    const mo=d.getMonth(), da=d.getDate();
+    if((mo===6&&da>=20)||(mo===7)) return; // 7/20-7/31 と 8月は営業
+    if(!HOLIDAY.has(s)) set.add(s);
+    else { let n=new Date(d.getTime()+864e5); while(HOLIDAY.has(iso(n))) n=new Date(n.getTime()+864e5); set.add(iso(n)); }
+  });
+  return set;
+}
+// 世田谷：毎月第3月曜（祝日なら直後の平日）＋年末年始(12/29-31)。7月は第2月曜、8月はなし
+function ruleSetagaya(){
+  const set=new Set();
+  eachDay(function(d,s){ if(d.getMonth()===11&&d.getDate()>=29&&d.getDate()<=31) set.add(s); });
+  eachMonthInRange(function(y,m){
+    if(m===8) return;
+    const mon=nthWeekday(y,m,1,(m===7)?2:3); if(!mon) return;
+    const s=afterHolidayWeekday(mon);
+    if(s>=RANGE_START&&s<=RANGE_END) set.add(s);
+  });
+  return set;
+}
+// 代官山：毎月第2・第4月曜（祝日なら直後の平日）＋年末年始(12/29-1/3)
+function ruleDaikanyama(){
+  const set=new Set();
+  eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
+  eachMonthInRange(function(y,m){
+    [2,4].forEach(function(n){
+      const mon=nthWeekday(y,m,1,n); if(!mon) return;
+      const s=afterHolidayWeekday(mon);
+      if(s>=RANGE_START&&s<=RANGE_END) set.add(s);
+    });
+  });
+  return set;
+}
+// アクアブルー多摩：プール休場=毎週火曜。7月は第1・2火のみ、8月は定期休なし＋年末年始
+function ruleTama(){
+  const set=new Set();
+  eachDay(function(d,s,wd){
+    if(isYearEnd(d)){ set.add(s); return; }
+    if(wd!==2) return;
+    const mo=d.getMonth();
+    if(mo===7) return; // 8月は定期休館なし
+    if(mo===6){ const y=d.getFullYear(); const t1=nthWeekday(y,7,2,1),t2=nthWeekday(y,7,2,2);
+      if(s===iso(t1)||s===iso(t2)) set.add(s); return; }
+    set.add(s);
+  });
+  return set;
+}
+// 武蔵野：毎月15日定期休場（土日祝は翌平日）＋年末年始。7・8月はプールのみ開場のため除外
+// ※臨時休場・時間限定休場は DATA(closed/partial) 側に令和8年度PDFから手動反映
+function ruleMusashino(){
+  const set=new Set();
+  eachMonthInRange(function(y,m){
+    if(m===7||m===8) return; // 7・8月はプール開場
+    let d=new Date(y,m-1,15), s=iso(d);
+    if(d.getDay()===0||d.getDay()===6||HOLIDAY.has(s)){
+      let n=new Date(d);
+      do{ n=new Date(n.getTime()+864e5); }while(n.getDay()===0||n.getDay()===6||HOLIDAY.has(iso(n)));
+      s=iso(n);
+    }
+    if(s>=RANGE_START&&s<=RANGE_END) set.add(s);
+  });
+  eachDay(function(d,s){ if(isYearEnd(d)) set.add(s); });
+  return set;
+}
+const RULES={zengyo:ruleZengyo, hikichidai:ruleHikichidai, setagaya:ruleSetagaya,
+  daikanyama:ruleDaikanyama, tama:ruleTama, musashino:ruleMusashino};
 POOLS.forEach(p=>{ p.ruleSet=(p.rule&&RULES[p.rule])?RULES[p.rule]():new Set(); });
 
 const now=new Date(); const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})); const TODAY=iso(jst);

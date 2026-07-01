@@ -35,7 +35,14 @@ POOLS = [
      "url": "https://yokohama-sport.jp/waterarena/schedule/"},
     {"id": "zen",  "kind": "partial", "parser": "zengyo_partial",
      "url": "https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"},
+    {"id": "chiba", "kind": "closed", "parser": "chiba",
+     "url": "https://www.chiba-swim.gr.jp/"},
 ]
+
+# スクレイプ対象外だが index.html の DATA に手動反映しているプール（上書き/削除しない）。
+#   musashino … 年間PDFがカレンダー画像で自動解析不可。毎月15日ルールは index.html 側、
+#               臨時休場は DATA に令和8年度PDFから手動反映（年度更新時に要見直し）。
+STATIC_POOL_IDS = {"musashino"}
 
 def z2h(s):
     return unicodedata.normalize("NFKC", s)
@@ -139,10 +146,59 @@ def source_yokohama(pool, ctx, cur):
     out = {k: v for k, v in out.items() if k >= today or k in cur}
     return out
 
+# ---------- 千葉県国際：年度休場日PDF（テキスト抽出可）----------
+def parse_chiba_text(pdf_text):
+    """年度休場日PDFのテキストから {YYYY-MM-DD:"休場"} を返す。
+    形式例: "6月 8日(月)" / "11月 4日(水)～11月20日(金)"。年度は "２０２６年度" から。"""
+    t = z2h(pdf_text)
+    ym = re.search(r"(20\d\d)\s*年度", t)
+    base = int(ym.group(1)) if ym else datetime.datetime.now(JST).year
+    def yof(m):
+        return base if m >= 4 else base + 1   # 年度：4月以降は base、1〜3月は翌年
+    out = {}
+    day = r"(\d{1,2})月\s*(\d{1,2})日\([日月火水木金土]\)"
+    # 期間: M月D日(曜)～M月D日(曜)。～はNFKCで ~(U+007E) になる/〜(U+301C)のまま等ゆれるので全部許容
+    rng = re.compile(day + r"\s*[~〜～]\s*" + day)
+    for m1, d1, m2, d2 in rng.findall(t):
+        m1, d1, m2, d2 = int(m1), int(d1), int(m2), int(d2)
+        cur = datetime.date(yof(m1), m1, d1)
+        end = datetime.date(yof(m2), m2, d2)
+        while cur <= end:
+            iso = cur.strftime("%Y-%m-%d")
+            if in_range(iso):
+                out[iso] = "休場"
+            cur += datetime.timedelta(days=1)
+    # 単日（期間表記を除いてから拾う）
+    t2 = rng.sub("", t)
+    for m, d in re.findall(day, t2):
+        m, d = int(m), int(d)
+        iso = datetime.date(yof(m), m, d).strftime("%Y-%m-%d")
+        if in_range(iso):
+            out[iso] = "休場"
+    return out
+
+def source_chiba(pool, ctx, cur):
+    """トップページから「休場日」を含むPDFリンクを探し、テキスト抽出して解析。"""
+    import io, urllib.parse
+    top = ctx.gettext(pool["url"])
+    links = re.findall(r'href="([^"]+\.pdf)"', top)
+    pdf = None
+    for l in links:
+        if "休場日" in urllib.parse.unquote(l):
+            pdf = l if l.startswith("http") else ("https://www.chiba-swim.gr.jp" + l)
+            break
+    if not pdf or ctx.pdfplumber is None:
+        raise ValueError("休場日PDFリンクが見つからない")
+    data = ctx.get(pdf).content
+    with ctx.pdfplumber.open(io.BytesIO(data)) as p:
+        txt = "\n".join((pg.extract_text() or "") for pg in p.pages)
+    return parse_chiba_text(txt)
+
 DISPATCH = {
     "tac": source_tac,
     "zengyo_partial": source_zengyo_partial,
     "yokohama": source_yokohama,
+    "chiba": source_chiba,
 }
 
 # ---------- index.html 書き換え ----------
@@ -193,7 +249,8 @@ def main():
         html = f.read()
     existing = extract_existing(html)
 
-    data = {}
+    # 既存DATAを土台に（STATIC_POOL_IDS など未管理プールの手動反映分を温存）
+    data = dict(existing)
     for pool in POOLS:
         pid, kind = pool["id"], pool["kind"]
         cur = existing.get(pid, {}).get(kind, {})
