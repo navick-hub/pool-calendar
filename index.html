@@ -25,9 +25,21 @@
   /* チップ色は POOLS のインラインスタイルで指定。.part は一部休止（点線）チップの基底 */
   .part{background:#fff !important}
   .note{background:#fff8e7;border:1px solid #f0e0b8;border-radius:10px;padding:9px 12px;font-size:.76rem;color:#7a5a14;margin:8px 0 6px;line-height:1.7}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
-  .controls label{font-size:.8rem;display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--line);
-    padding:5px 10px;border-radius:999px;cursor:pointer}
+  /* 絞り込み＝色付きトグルチップ（凡例も兼ねる） */
+  .filters{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px}
+  .pf{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:600;line-height:1;
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:5px 10px;cursor:pointer}
+  .pf .sw{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;
+    background:var(--c);color:#fff;font-size:.62rem;font-weight:700}
+  .pf.off{opacity:.4}
+  .pf.off .sw{background:var(--sub)}
+  /* 折りたたみ（絞り込み・使い方） */
+  .ff,.help{margin:4px 0}
+  .ff>summary,.help>summary{cursor:pointer;color:var(--tac);font-weight:600;font-size:.8rem;padding:7px 2px;list-style:none}
+  .ff>summary::-webkit-details-marker,.help>summary::-webkit-details-marker{display:none}
+  .ff>summary::before{content:"🔎 "}
+  .help>summary::before{content:"ⓘ "}
+  .help{margin-bottom:12px}
   .month{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
   .mtitle{font-size:1rem;font-weight:700;margin:0 0 8px 4px}
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
@@ -49,14 +61,19 @@
 <div class="wrap">
   <h1>🏊 プール休館日カレンダー</h1>
   <div class="upd" id="upd">最終更新：2026/6/17（公式サイトより取得）</div>
-  <div class="legend" id="legend"></div>
-  <div class="note">
-    チップが付いた日＝そのプールが<b>休館/利用不可</b>。何も付かない日は各館とも営業。<b>点線</b>のチップは<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。上のボタンで館ごとに表示を絞り込めます。
-  </div>
-  <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
-    <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b id="yoko-max">9/24(木)</b>まで。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
-  </div>
-  <div class="controls" id="controls"></div>
+  <details class="ff">
+    <summary>プールで絞り込む（14館・全表示中）</summary>
+    <div class="filters" id="filters"></div>
+  </details>
+  <details class="help">
+    <summary>使い方・凡例・注意</summary>
+    <div class="note">
+      色付きのチップが付いた日＝その日はそのプールが<b>休館/利用不可</b>。何も付かない日は営業。<b>点線</b>のチップは<b>一部時間帯のみ休止</b>（チップを<b>タップ</b>すると時間が下に出ます）。上の丸ボタンをタップすると館ごとに表示をON/OFFできます。
+    </div>
+    <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
+      <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b id="yoko-max">9/24(木)</b>まで。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
+    </div>
+  </details>
   <div id="cal"></div>
   <div id="toast"></div>
   <div class="foot">
@@ -475,7 +492,10 @@ function chip(p,dl,label,partial){
 }
 function build(){
   let html="";
-  for(let y=2026,m=6;!(y===2027&&m===4);){
+  // 表示開始＝今月（JST）。ただし範囲開始(2026/6)より前なら6月から。過ぎた月は出さない。
+  let sy=jst.getFullYear(), sm=jst.getMonth()+1;
+  if(sy<2026||(sy===2026&&sm<6)){ sy=2026; sm=6; }
+  for(let y=sy,m=sm; !(y>2027||(y===2027&&m>3)); ){
     html+='<div class="month"><div class="mtitle">'+y+'年 '+m+'月</div><div class="grid">';
     for(let i=0;i<7;i++){html+='<div class="dow '+(i===0?'sun':i===6?'sat':'')+'">'+W[i]+'</div>';}
     const first=new Date(y,m-1,1); const start=first.getDay(); const dim=new Date(y,m,0).getDate();
@@ -499,18 +519,23 @@ function build(){
   document.getElementById("cal").innerHTML=html;
 }
 
-// ===== 凡例・絞り込みチェックボックスを POOLS から生成 =====
+// ===== 絞り込み＝色付きトグルチップ（凡例も兼ねる）を POOLS から生成 =====
 (function(){
-  let leg="", ctl="";
-  POOLS.forEach(p=>{
-    leg+='<span class="lg"><span class="chip" style="background:'+p.color+'">'+p.short+'</span>'+p.name+'</span>';
-    if(Object.keys(p.partial).length)
-      leg+='<span class="lg"><span class="chip part" style="background:#fff;border:1.5px dashed '+p.color+';color:'+p.color+'">'+p.short+'</span>'+p.name+'・一部休止</span>';
-    ctl+='<label><input type="checkbox" id="ck-'+p.id+'" checked> '+p.ctrl+'</label>';
+  var box=document.getElementById('filters');
+  var sum=document.querySelector('.ff>summary');
+  function updateSummary(){
+    var on=POOLS.filter(function(p){return p.show;}).length;
+    sum.textContent = on===POOLS.length ? 'プールで絞り込む（'+POOLS.length+'館・全表示中）'
+                                        : 'プールで絞り込む（'+on+'/'+POOLS.length+'館 表示中）';
+  }
+  POOLS.forEach(function(p){
+    var b=document.createElement('button');
+    b.className='pf'; b.type='button'; b.style.setProperty('--c',p.color);
+    b.innerHTML='<span class="sw">'+p.short+'</span>'+p.ctrl;
+    b.addEventListener('click',function(){ p.show=!p.show; b.classList.toggle('off',!p.show); updateSummary(); build(); });
+    box.appendChild(b);
   });
-  document.getElementById('legend').innerHTML=leg;
-  document.getElementById('controls').innerHTML=ctl;
-  POOLS.forEach(p=>document.getElementById('ck-'+p.id).addEventListener('change',function(){p.show=this.checked;build();}));
+  updateSummary();
 })();
 
 // ヘッダの最終更新日・月次プール（横浜国際）の確定最終日を自動表示
