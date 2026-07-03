@@ -75,6 +75,8 @@ def parse_tac(html):
             b = body.replace("トレーニングルーム", "").replace("プール", "")
             b = re.sub(r"[、，]+", "・", b).strip("・　 ")
             label = (b + "休館") if b else "休館"
+        # 多層防御：外部サイト由来の自由文字列。HTML特殊文字・制御文字を除去（表示はindex.html側でもescするが二重で防ぐ）
+        label = re.sub(r'[<>"\'\r\n\t]', "", label)
         out[iso] = label
     return out
 

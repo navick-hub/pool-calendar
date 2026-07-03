@@ -486,12 +486,14 @@ POOLS.forEach(p=>{ p.ruleSet=(p.rule&&RULES[p.rule])?RULES[p.rule]():new Set(); 
 
 const now=new Date(); const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})); const TODAY=iso(jst);
 
+// HTMLエスケープ（属性/本文への注入対策。休館ラベルは外部公式サイト由来の文字列を含むため必須）
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 // 実線=全日休館 / 点線=一部休止。色はプールごとにインラインで指定
 function chip(p,dl,label,partial){
-  const title=dl+p.name+"："+label;
+  const title=esc(dl+p.name+"："+label);
   const style=partial ? 'background:#fff;border:1.5px dashed '+p.color+';color:'+p.color
                       : 'background:'+p.color;
-  return '<span class="chip'+(partial?' part':'')+'" style="'+style+'" title="'+title+'" data-info="'+title+'">'+p.short+'</span>';
+  return '<span class="chip'+(partial?' part':'')+'" style="'+style+'" title="'+title+'" data-info="'+title+'">'+esc(p.short)+'</span>';
 }
 function build(){
   let html="";
