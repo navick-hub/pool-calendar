@@ -53,6 +53,19 @@ def z2h(s):
 def in_range(iso):
     return RANGE_START <= iso <= RANGE_END
 
+def host_allowed(url, allowed):
+    """取得先URLのホストが許可リスト(公式ドメイン)に含まれるか。https限定。
+    取得元ページが改ざんされリンクをすり替えられても外部URLを取りに行かないためのSSRF対策。"""
+    import urllib.parse
+    try:
+        u = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    if u.scheme != "https":
+        return False
+    host = (u.hostname or "").lower()
+    return any(host == d or host.endswith("." + d) for d in allowed)
+
 # ---------- 東京アクアティクス：確定表(HTML) ----------
 def parse_tac(html):
     """HTML/テキストから プール影響の休館日 を {YYYY-MM-DD: ラベル} で返す"""
@@ -137,6 +150,8 @@ def source_yokohama(pool, ctx, cur):
     sched = ctx.gettext(pool["url"])
     pdfs = re.findall(r'href="([^"]+\.pdf)"', sched)
     pdfs = [p if p.startswith("http") else ("https://yokohama-sport.jp" + p) for p in pdfs]
+    # 公式ドメインのPDFのみ取得（改ざんによる外部URL誘導を防ぐ）
+    pdfs = [p for p in pdfs if host_allowed(p, {"yokohama-sport.jp"})]
     seen = set()
     for url in pdfs[:4]:
         if url in seen or ctx.pdfplumber is None:
@@ -190,8 +205,11 @@ def source_chiba(pool, ctx, cur):
     pdf = None
     for l in links:
         if "休場日" in urllib.parse.unquote(l):
-            pdf = l if l.startswith("http") else ("https://www.chiba-swim.gr.jp" + l)
-            break
+            cand = l if l.startswith("http") else ("https://www.chiba-swim.gr.jp" + l)
+            # 公式ドメインのPDFのみ取得（改ざんによる外部URL誘導を防ぐ）
+            if host_allowed(cand, {"chiba-swim.gr.jp"}):
+                pdf = cand
+                break
     if not pdf or ctx.pdfplumber is None:
         raise ValueError("休場日PDFリンクが見つからない")
     data = ctx.get(pdf).content
