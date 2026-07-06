@@ -29,13 +29,13 @@ JST   = datetime.timezone(datetime.timedelta(hours=9))
 # kind: "closed"（全日休館）/ "partial"（一部休止）… パーサ結果を書き込む先
 # parser: 下の DISPATCH のキー
 POOLS = [
-    {"id": "tac",  "kind": "closed",  "parser": "tac",
+    {"id": "tac",  "kind": "both",    "parser": "tac",
      "url": "https://www.tef.or.jp/tac/closure.html"},
     {"id": "yoko", "kind": "closed",  "parser": "yokohama",
      "url": "https://yokohama-sport.jp/waterarena/schedule/"},
     {"id": "zen",  "kind": "partial", "parser": "zengyo_partial",
      "url": "https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"},
-    {"id": "chiba", "kind": "closed", "parser": "chiba",
+    {"id": "chiba", "kind": "both",   "parser": "chiba",
      "url": "https://www.chiba-swim.gr.jp/"},
     # 目黒：区公式「今後の予定表」HTML表から目黒区民センター行を取得（closed=全日/partial=時間限定）
     {"id": "meguro", "kind": "both", "parser": "meguro",
@@ -138,7 +138,11 @@ def parse_yokohama_text(pdf_text):
 #   cur … 既存値（フォールバックや累積マージ用）
 
 def source_tac(pool, ctx, cur):
-    return parse_tac(ctx.gettext(pool["url"]))
+    # 全館休館=closed（実線）／メイン・サブ・ダイビングのみ休館=partial（施設は営業＝点線）
+    raw = parse_tac(ctx.gettext(pool["url"]))
+    closed = {k: v for k, v in raw.items() if "全館" in v}
+    partial = {k: v for k, v in raw.items() if "全館" not in v}
+    return {"closed": closed, "partial": partial}
 
 def source_zengyo_partial(pool, ctx, cur):
     return parse_zengyo_partial(ctx.gettext(pool["url"]))
@@ -197,8 +201,8 @@ def parse_chiba_text(pdf_text):
             out[iso] = "休場"
     return out
 
-def source_chiba(pool, ctx, cur):
-    """トップページから「休場日」を含むPDFリンクを探し、テキスト抽出して解析。"""
+def _chiba_closed_from_pdf(pool, ctx):
+    """トップページから「休場日」を含むPDFリンクを探し、全館休場日 {iso:"休場"} を返す。"""
     import io, urllib.parse
     top = ctx.gettext(pool["url"])
     links = re.findall(r'href="([^"]+\.pdf)"', top)
@@ -216,6 +220,62 @@ def source_chiba(pool, ctx, cur):
     with ctx.pdfplumber.open(io.BytesIO(data)) as p:
         txt = "\n".join((pg.extract_text() or "") for pg in p.pages)
     return parse_chiba_text(txt)
+
+# 水面別カレンダー（公開HTML）。メイン/サブ/飛込 が別 facility_id で日別状態を持つ。
+CHIBA_SURFACES = {1: "メイン", 2: "サブ", 3: "飛込"}
+# 一般利用不可＝レッスン不可/しにくい状態（公式凡例：全面使用・大会は一般利用不可）
+CHIBA_RESTRICT = ("大会", "全面使用", "大会準備", "休場日")
+
+def parse_chiba_calendar(html_text):
+    """reserve/calendar の <table class="calendar"> から {日(int): set(状態文字列)} を返す。"""
+    import html as H
+    m = re.search(r'<table class="calendar"[\s\S]*?</table>', html_text)
+    if not m:
+        return {}
+    out = {}
+    for row in re.findall(r"<tr[\s\S]*?</tr>", m.group(0)):
+        cells = [H.unescape(re.sub(r"<[^>]+>", "", c)).strip()
+                 for c in re.findall(r"<t[dh][\s\S]*?</t[dh]>", row)]
+        if not cells:
+            continue
+        md = re.match(r"^(\d+)/", cells[0])   # 例 "13/月"
+        if not md:
+            continue
+        out[int(md.group(1))] = {c for c in cells[1:] if c and c != "\xa0"}
+    return out
+
+def source_chiba(pool, ctx, cur):
+    """closed=年度休場日PDF（全館休場）／partial=直近3か月の水面別占有（メイン/サブ/飛込）。"""
+    closed = _chiba_closed_from_pdf(pool, ctx)
+    partial = {}
+    now = datetime.datetime.now(JST)
+    months, y, mo = [], now.year, now.month
+    for _ in range(3):                        # 当月＋2か月（大会予定が入る近未来のみ）
+        months.append((y, mo))
+        mo += 1
+        if mo > 12:
+            mo = 1; y += 1
+    for (yy, mm) in months:
+        by_day = {}                           # iso -> {水面名: 状態}
+        for fid, sname in CHIBA_SURFACES.items():
+            url = f"https://www.chiba-swim.gr.jp/reserve/calendar?facility_id={fid}&year={yy}&month={mm}"
+            if not host_allowed(url, {"chiba-swim.gr.jp"}):
+                continue
+            try:
+                cal = parse_chiba_calendar(ctx.gettext(url))
+            except Exception as e:
+                print(f"chiba calendar {fid}/{yy}-{mm} failed:", e)
+                continue
+            for day, sts in cal.items():
+                iso = f"{yy:04d}-{mm:02d}-{day:02d}"
+                if not in_range(iso) or iso in closed:   # 全館休場は closed 側に集約済み
+                    continue
+                hit = next((s for s in CHIBA_RESTRICT if s in sts), None)
+                if hit:
+                    by_day.setdefault(iso, {})[sname] = hit
+        for iso, surf in by_day.items():
+            partial[iso] = "、".join(f"{n}={st}" for n, st in surf.items())
+    return {"closed": closed, "partial": partial}
 
 # ---------- 目黒区民センター：区公式「今後の予定表」HTML表 ----------
 def parse_meguro_cell(cell):
