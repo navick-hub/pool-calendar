@@ -222,30 +222,31 @@ def _chiba_closed_from_pdf(pool, ctx):
     return parse_chiba_text(txt)
 
 # 水面別カレンダー（公開HTML）。メイン/サブ/飛込 が別 facility_id で日別状態を持つ。
+# セル値: ""=一般開放の空き / "閉場"=時間外(その水面は非営業) / 大会・全面使用・大会準備=イベント占有 / 休場日
 CHIBA_SURFACES = {1: "メイン", 2: "サブ", 3: "飛込"}
-# 一般利用不可＝レッスン不可/しにくい状態（公式凡例：全面使用・大会は一般利用不可）
-CHIBA_RESTRICT = ("大会", "全面使用", "大会準備", "休場日")
+CHIBA_OCC = ("大会", "全面使用", "大会準備")   # イベント占有（一般利用不可の要因）
 
 def parse_chiba_calendar(html_text):
-    """reserve/calendar の <table class="calendar"> から {日(int): set(状態文字列)} を返す。"""
+    """reserve/calendar の表から {日(int): [各時間帯セルの文字列]} を返す（""＝一般開放の空き）。"""
     import html as H
     m = re.search(r'<table class="calendar"[\s\S]*?</table>', html_text)
     if not m:
         return {}
     out = {}
     for row in re.findall(r"<tr[\s\S]*?</tr>", m.group(0)):
-        cells = [H.unescape(re.sub(r"<[^>]+>", "", c)).strip()
+        cells = [H.unescape(re.sub(r"<[^>]+>", "", c)).strip().replace("\xa0", "")
                  for c in re.findall(r"<t[dh][\s\S]*?</t[dh]>", row)]
         if not cells:
             continue
         md = re.match(r"^(\d+)/", cells[0])   # 例 "13/月"
         if not md:
             continue
-        out[int(md.group(1))] = {c for c in cells[1:] if c and c != "\xa0"}
+        out[int(md.group(1))] = cells[1:]
     return out
 
 def source_chiba(pool, ctx, cur):
-    """closed=年度休場日PDF（全館休場）／partial=直近3か月の水面別占有（メイン/サブ/飛込）。"""
+    """水面別に集計。closed=年度休場PDF＋『全水面が大会等で使えない＝実質休場』（実線）。
+    partial=一部の水面だけ終日ふさがるが他は使える日（点線・利用可の水面を明記）。"""
     closed = _chiba_closed_from_pdf(pool, ctx)
     partial = {}
     now = datetime.datetime.now(JST)
@@ -256,25 +257,41 @@ def source_chiba(pool, ctx, cur):
         if mo > 12:
             mo = 1; y += 1
     for (yy, mm) in months:
-        by_day = {}                           # iso -> {水面名: 状態}
-        for fid, sname in CHIBA_SURFACES.items():
+        cals = {}
+        for fid in CHIBA_SURFACES:
             url = f"https://www.chiba-swim.gr.jp/reserve/calendar?facility_id={fid}&year={yy}&month={mm}"
             if not host_allowed(url, {"chiba-swim.gr.jp"}):
                 continue
             try:
-                cal = parse_chiba_calendar(ctx.gettext(url))
+                cals[fid] = parse_chiba_calendar(ctx.gettext(url))
             except Exception as e:
                 print(f"chiba calendar {fid}/{yy}-{mm} failed:", e)
+        if not cals:
+            continue
+        days = set().union(*[set(c.keys()) for c in cals.values()])
+        for day in days:
+            iso = f"{yy:04d}-{mm:02d}-{day:02d}"
+            if not in_range(iso) or iso in closed:      # 公式休場は PDF 側に集約済み
                 continue
-            for day, sts in cal.items():
-                iso = f"{yy:04d}-{mm:02d}-{day:02d}"
-                if not in_range(iso) or iso in closed:   # 全館休場は closed 側に集約済み
-                    continue
-                hit = next((s for s in CHIBA_RESTRICT if s in sts), None)
-                if hit:
-                    by_day.setdefault(iso, {})[sname] = hit
-        for iso, surf in by_day.items():
-            partial[iso] = "、".join(f"{n}={st}" for n, st in surf.items())
+            usable, blocked = [], []                    # blocked=イベントで終日ふさがった水面
+            any_event = any_kyujo = False
+            for fid, name in CHIBA_SURFACES.items():
+                cells = cals.get(fid, {}).get(day, [])
+                has_open = any(c == "" for c in cells)
+                has_event = any(c in CHIBA_OCC for c in cells)
+                any_event = any_event or has_event
+                any_kyujo = any_kyujo or ("休場日" in cells)
+                if has_open:
+                    usable.append(name)
+                elif has_event:                         # 空き無し＋イベント＝その水面は終日不可
+                    blocked.append(name)
+            if usable:
+                if blocked:                             # 一部の水面だけ不可（他は使える）＝点線
+                    partial[iso] = "一部制限（利用可: " + "・".join(usable) + "）"
+            elif any_event:                             # どの水面も使えない＝実質休場（実線）
+                closed[iso] = "全水面 利用不可（大会・占有等）"
+            elif any_kyujo:                             # 全水面 休場日
+                closed[iso] = "休場"
     return {"closed": closed, "partial": partial}
 
 # ---------- 目黒区民センター：区公式「今後の予定表」HTML表 ----------
