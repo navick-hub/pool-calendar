@@ -45,7 +45,9 @@ POOLS = [
 # スクレイプ対象外だが index.html の DATA に手動反映しているプール（上書き/削除しない）。
 #   musashino … 年間PDFがカレンダー画像で自動解析不可。毎月15日ルールは index.html 側、
 #               臨時休場は DATA に令和8年度PDFから手動反映（年度更新時に要見直し）。
-STATIC_POOL_IDS = {"musashino"}
+#   sagamihara … 予定表が画像JPGのため自動解析不可。改修中(50m・飛込休止)で25mのみ。大会等は
+#                画像から手動/週1スケジュールで DATA に反映（休館ルールは index.html 側）。
+STATIC_POOL_IDS = {"musashino", "sagamihara"}
 
 def z2h(s):
     return unicodedata.normalize("NFKC", s)

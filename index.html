@@ -243,6 +243,12 @@ const DATA = {
    "2026-10-12": "13:00までプール臨時休場"
   }
  },
+ "sagamihara": {
+  "closed": {
+   "2026-07-11": "大会のため利用不可（改修中は25mのみ営業）",
+   "2026-07-26": "大会のため利用不可（改修中は25mのみ営業）"
+  }
+ },
  "tac": {
   "closed": {
    "2026-07-21": "全館休館",
@@ -369,7 +375,7 @@ const POOLS=[
  {id:"hokubu", name:"北部公園屋内プール(海老名市)", ctrl:"北部公園", short:"北", color:"#689f38",
    rule:"hokubu", ruleLabel:"休館（毎月第2水曜＋年末年始）※長期休館は別途"},
  {id:"sagamihara", name:"相模原グリーンプール", ctrl:"相模原", short:"相", color:"#f4511e",
-   rule:"sagamihara", ruleLabel:"休館（毎月第2・第4月曜／祝日は営業）"},
+   rule:"sagamihara", ruleLabel:"休館（毎月第2・第4月曜／祝日は営業）※改修中: 50m・飛込は休止、25mのみ営業"},
  // 目黒：year-endはルール、臨時/部分休館は区公式HTML表を update_data.py が自動取得
  {id:"meguro", name:"目黒区民センター屋内プール", ctrl:"目黒", short:"目", color:"#455a64",
    rule:"meguro", ruleLabel:"休館（12/28-1/4）"},
