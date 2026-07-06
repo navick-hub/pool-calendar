@@ -137,11 +137,23 @@ def parse_yokohama_text(pdf_text):
 #   ctx.get / ctx.gettext … HTTP ヘルパ、ctx.pdfplumber … PDF ライブラリ（無ければ None）
 #   cur … 既存値（フォールバックや累積マージ用）
 
+# 東京アクアの水面。partialでは「使える方（利用可）」を前に出して分かりやすくする。
+TAC_SURFACES = ["メイン", "サブ", "ダイビング"]
+
 def source_tac(pool, ctx, cur):
-    # 全館休館=closed（実線）／メイン・サブ・ダイビングのみ休館=partial（施設は営業＝点線）
+    # 全館休館=closed（実線）／一部の水面のみ休館=partial（点線）。点線は「利用可: ◯◯」表記に変換。
     raw = parse_tac(ctx.gettext(pool["url"]))
-    closed = {k: v for k, v in raw.items() if "全館" in v}
-    partial = {k: v for k, v in raw.items() if "全館" not in v}
+    closed, partial = {}, {}
+    for iso, label in raw.items():
+        if "全館" in label:
+            closed[iso] = label
+            continue
+        closed_s = [s for s in TAC_SURFACES if s in label]      # 休館の水面
+        usable = [s for s in TAC_SURFACES if s not in closed_s]  # 使える水面
+        if closed_s and usable:
+            partial[iso] = "利用可: " + "・".join(usable) + "（" + "・".join(closed_s) + "休館）"
+        else:
+            partial[iso] = label                                 # 想定外表記はそのまま
     return {"closed": closed, "partial": partial}
 
 def source_zengyo_partial(pool, ctx, cur):
