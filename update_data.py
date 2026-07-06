@@ -31,7 +31,7 @@ JST   = datetime.timezone(datetime.timedelta(hours=9))
 POOLS = [
     {"id": "tac",  "kind": "both",    "parser": "tac",
      "url": "https://www.tef.or.jp/tac/closure.html"},
-    {"id": "yoko", "kind": "closed",  "parser": "yokohama",
+    {"id": "yoko", "kind": "both",    "parser": "yokohama",
      "url": "https://yokohama-sport.jp/waterarena/schedule/"},
     {"id": "zen",  "kind": "partial", "parser": "zengyo_partial",
      "url": "https://www.pref.kanagawa.jp/docs/ui6/1/news/pool-closing-schedule.html"},
@@ -109,28 +109,43 @@ def parse_zengyo_partial(html):
         out[iso] = f"{int(h1)}:00-{int(h2)}:00 利用休止"
     return out
 
-# ---------- 横浜国際：月次チラシPDFのテキストから ----------
-def parse_yokohama_text(pdf_text):
-    """1枚のチラシPDFのテキストから確定休館日 {YYYY-MM-DD:"休館日"} を返す"""
-    t = z2h(pdf_text)
-    out = {}
-    # チラシの年月（例: 2026年6月予定表）
-    ym = re.search(r"(20\d\d)年\s*(\d{1,2})月予定表", t)
-    base_year = int(ym.group(1)) if ym else datetime.date.today().year
-    base_month = int(ym.group(2)) if ym else datetime.date.today().month
-    def to_iso(m, d):
-        y = base_year + (1 if m < base_month else 0)
-        return f"{y:04d}-{int(m):02d}-{int(d):02d}"
-    # 「次回休館日：9月24日（木）」
-    for m, d in re.findall(r"次回休館日[：: ]*(\d{1,2})月(\d{1,2})日", t):
-        out[to_iso(int(m), int(d))] = "休館日"
-    # 「休館日のご案内 … 6月16日（火）」: 休館日の近くにある M月D日（曜）
-    for mobj in re.finditer(r"休館日", t):
-        seg = t[mobj.start(): mobj.start()+40]
-        for m, d in re.findall(r"(\d{1,2})月(\d{1,2})日\([日月火水木金土]\)", seg):
-            out[to_iso(int(m), int(d))] = "休館日"
-    # 範囲内のみ
-    return {k: v for k, v in out.items() if in_range(k)}
+# ---------- 横浜国際：月次チラシPDFを座標解析（メイン/サブ別）----------
+YOKO_EVENT = re.compile(r"大会|選手権|競技|設営|講習|記録会|予選|カップ|大学|チャレンジ")
+
+def parse_yokohama_pdf(pdf):
+    """チラシPDF(1ページ)を座標で解析。メイン列(x<330)/サブ列(x<545)を日ごとに分離し、
+    {(year,month), {day: (main_status, sub_status)}} を返す。status: 休館/大会/個人利用。"""
+    pg = pdf.pages[0]
+    words = [{"t": z2h(w["text"]), "x": w["x0"], "y": w["top"]} for w in pg.extract_words()]
+    ym = re.search(r"(20\d\d)年\s*(\d{1,2})月予定表", " ".join(w["t"] for w in words))
+    if not ym:
+        return None, {}
+    base = (int(ym.group(1)), int(ym.group(2)))
+    dnums = sorted([w for w in words
+                    if re.fullmatch(r"\d{1,2}", w["t"]) and 1 <= int(w["t"]) <= 31
+                    and w["x"] < 130 and w["y"] > 110],
+                   key=lambda w: w["y"])
+    res = {}
+    for i, w in enumerate(dnums):
+        yt = w["y"] - 5
+        yb = (dnums[i + 1]["y"] - 3) if i + 1 < len(dnums) else w["y"] + 25
+        cell = {"main": [], "sub": []}
+        for x in words:
+            if yt <= x["y"] < yb and not re.fullmatch(r"\d{1,2}", x["t"]) and x["t"] not in "月火水木金土日":
+                if x["x"] < 330:
+                    cell["main"].append(x["t"])
+                elif x["x"] < 545:
+                    cell["sub"].append(x["t"])
+
+        def status(toks):
+            s = "".join(toks)
+            if "休館日" in s:
+                return "休館"
+            if YOKO_EVENT.search(s):
+                return "大会"
+            return "個人利用"
+        res[int(w["t"])] = (status(cell["main"]), status(cell["sub"]))
+    return base, res
 
 # ---------- ソース型ディスパッチ ----------
 # 各 source_* は (pool, ctx, cur) を受け取り {YYYY-MM-DD: ラベル} を返す。
@@ -160,27 +175,45 @@ def source_zengyo_partial(pool, ctx, cur):
     return parse_zengyo_partial(ctx.gettext(pool["url"]))
 
 def source_yokohama(pool, ctx, cur):
-    """スケジュールページ→当月/翌月チラシPDF。既存値に上書きマージし、過去日を掃除。"""
+    """スケジュールページ→当月/翌月チラシPDFを座標解析。メイン/サブ別に closed/partial 生成。
+    両方休館=全館休館(実線)／両方ふさがる=実質休場(実線)／片方だけ=点線「利用可: ◯◯」。"""
     import io
-    out = dict(cur)
+    if ctx.pdfplumber is None:
+        raise ValueError("pdfplumber なし")
     sched = ctx.gettext(pool["url"])
     pdfs = re.findall(r'href="([^"]+\.pdf)"', sched)
     pdfs = [p if p.startswith("http") else ("https://yokohama-sport.jp" + p) for p in pdfs]
-    # 公式ドメインのPDFのみ取得（改ざんによる外部URL誘導を防ぐ）
-    pdfs = [p for p in pdfs if host_allowed(p, {"yokohama-sport.jp"})]
-    seen = set()
+    pdfs = [p for p in pdfs if host_allowed(p, {"yokohama-sport.jp"})]   # 公式ドメイン限定
+    closed, partial, seen, got = {}, {}, set(), False
     for url in pdfs[:4]:
-        if url in seen or ctx.pdfplumber is None:
+        if url in seen:
             continue
         seen.add(url)
-        data = ctx.get(url).content
-        with ctx.pdfplumber.open(io.BytesIO(data)) as pdf:
-            txt = "\n".join((pg.extract_text() or "") for pg in pdf.pages)
-        out.update(parse_yokohama_text(txt))
-    # 過去日を掃除（今日より前は落とす。ただし既存値にあったものは残す）
-    today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
-    out = {k: v for k, v in out.items() if k >= today or k in cur}
-    return out
+        try:
+            data = ctx.get(url).content
+            with ctx.pdfplumber.open(io.BytesIO(data)) as pdf:
+                base, res = parse_yokohama_pdf(pdf)
+        except Exception as e:
+            print("yoko pdf failed:", e)
+            continue
+        if not base or not res:
+            continue
+        got = True
+        yy, mm = base
+        for day, (ms, ss) in res.items():
+            iso = f"{yy:04d}-{mm:02d}-{day:02d}"
+            if not in_range(iso):
+                continue
+            usable = [n for n, s in (("メイン", ms), ("サブ", ss)) if s == "個人利用"]
+            occ = [(n, s) for n, s in (("メイン", ms), ("サブ", ss)) if s != "個人利用"]
+            if not usable:
+                closed[iso] = "全館休館" if (ms == "休館" and ss == "休館") else "全水面 利用不可（大会等）"
+            elif occ:
+                det = "・".join(f"{n}={s}" for n, s in occ)
+                partial[iso] = "利用可: " + "・".join(usable) + "（" + det + "）"
+    if not got:
+        raise ValueError("有効なチラシPDFなし")
+    return {"closed": closed, "partial": partial}
 
 # ---------- 千葉県国際：年度休場日PDF（テキスト抽出可）----------
 def parse_chiba_text(pdf_text):
