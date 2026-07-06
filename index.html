@@ -72,7 +72,7 @@
 色付きの<b>実線</b>チップ＝その日はそのプールが<b>全館休館/利用不可</b>。<b>点線</b>チップ＝<b>一部だけ休止・制限</b>（一部時間帯のみ／メイン営業でサブだけ休館／大会でコース占有 等。チップを<b>タップ</b>すると内容が下に出ます）。何も付かない日は営業。上の丸ボタンで館ごとに表示ON/OFF。<span style="color:#d23b3b">赤い日付＝日曜・祝日</span>（祝日は名前も表示。祝日の翌日に休館するプールが多いのでご注意を）。
     </div>
     <div class="note" style="background:#eef4fb;border-color:#cfe0f2;color:#274b6d">
-      <b>横浜国際</b>は月次チラシで発表のため、確定済みは <b id="yoko-max">9/24(木)</b>まで。10月以降は未発表（自動更新で反映）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
+      <b>横浜国際</b>は月次チラシで発表のため、<b id="yoko-max">—</b>頃までが公開済み。<b>それより先の月はまだ施設が未発表</b>（チラシ公開後に自動で反映されます）。大会開催日はコース予約・個人利用が制限されるので、予約は<a href="https://www.shisetsu.city.yokohama.lg.jp/user/Home" target="_blank" rel="noopener">予約システム</a>で要確認。
     </div>
   </details>
   <div id="cal"></div>
@@ -617,8 +617,8 @@ function build(){
 (function(){
   var u=document.getElementById('upd'); if(u) u.textContent="最終更新："+LAST_UPDATED+"（公式サイトより取得）";
   var mp=POOLS.find(function(p){return p.monthly;}); var el=document.getElementById('yoko-max');
-  if(el&&mp){ var ks=Object.keys(mp.closed).sort();
-    if(ks.length){ var p=ks[ks.length-1].split('-'); var dd=new Date(+p[0],+p[1]-1,+p[2]); el.textContent=(+p[1])+'/'+(+p[2])+'('+W[dd.getDay()]+')'; }
+  if(el&&mp){ var ks=Object.keys(mp.closed).concat(Object.keys(mp.partial)).sort();  // 公開済みの最終日=closed/partialの最大
+    if(ks.length){ var p=ks[ks.length-1].split('-'); var dd=new Date(+p[0],+p[1]-1,+p[2]); el.textContent=(+p[1])+'月'+(+p[2])+'日'; }
     else el.textContent='未取得'; }
 })();
 
