@@ -157,20 +157,147 @@ def parse_yokohama_pdf(pdf):
 # 東京アクアの水面。partialでは「使える方（利用可）」を前に出して分かりやすくする。
 TAC_SURFACES = ["メイン", "サブ", "ダイビング"]
 
+# 一般開放予定表PDF（当月・翌月分）: 大会・団体貸切で個人利用できない水面が分かる
+TAC_OPEN_URL = "https://www.tef.or.jp/tac/opening.html"
+TAC_SLOT = re.compile(r"^[A-F]?\d{1,2}:\d{2}$")   # コマ列の時刻表記（NFKC後）
+
+def parse_tac_open_pdf(pdf):
+    """一般開放予定表PDFを座標解析。ヘッダ語の座標は2ページ目で崩れるため、
+    左右2箇所にある「コマ」列（A9:00等の時刻表記）の間をプール3列（メイン/サブ/ダイビング）として3等分する。
+    返り値: ((year, month), {day: "休館" or {水面: 一般開放コマが1つでもあるか}})。情報の無い日は含めない。"""
+    head = z2h(pdf.pages[0].extract_text() or "")
+    m = re.search(r"令和\s*(\d+)\s*年\s*(\d{1,2})\s*月", head)
+    if m:
+        base = (2018 + int(m.group(1)), int(m.group(2)))
+    else:
+        m2 = re.search(r"(20\d\d)\s*年\s*(\d{1,2})\s*月", head)
+        if not m2:
+            return None, {}
+        base = (int(m2.group(1)), int(m2.group(2)))
+    days = {}
+    for pg in pdf.pages:
+        words = [{"t": z2h(w["text"]), "x0": w["x0"], "x1": w["x1"], "y": w["top"]}
+                 for w in pg.extract_words()]
+        slots = [w for w in words if TAC_SLOT.fullmatch(w["t"].replace(" ", ""))]
+        if not slots:
+            continue
+        mid = (min(w["x0"] for w in slots) + max(w["x1"] for w in slots)) / 2
+        lx = max(w["x1"] for w in slots if w["x0"] < mid)    # 左コマ列の右端
+        rx = min(w["x0"] for w in slots if w["x0"] >= mid)   # 右コマ列の左端
+        if rx - lx < 100:
+            continue
+        b1 = lx + (rx - lx) / 3
+        b2 = lx + (rx - lx) * 2 / 3
+        dnums = sorted([w for w in words
+                        if re.fullmatch(r"\d{1,2}", w["t"]) and 1 <= int(w["t"]) <= 31
+                        and w["x1"] < lx - 20],
+                       key=lambda w: w["y"])
+        uniq = []
+        for w in dnums:                                      # 同一行の重複除去
+            if uniq and abs(uniq[-1]["y"] - w["y"]) < 8:
+                continue
+            uniq.append(w)
+        for i, w in enumerate(uniq):
+            yt = w["y"] - 4
+            yb = uniq[i + 1]["y"] - 4 if i + 1 < len(uniq) else pg.height
+            day = int(w["t"])
+            cell = {s: [] for s in TAC_SURFACES}
+            kyukan = False
+            for t in words:
+                if not (yt <= t["y"] < yb):
+                    continue
+                if "休館日" in t["t"]:
+                    kyukan = True
+                cx = (t["x0"] + t["x1"]) / 2
+                if not (lx < cx < rx):
+                    continue
+                col = "メイン" if cx < b1 else ("サブ" if cx < b2 else "ダイビング")
+                cell[col].append(t["t"])
+            if kyukan:
+                days[day] = "休館"
+            elif sum(len(v) for v in cell.values()) > 0:     # 情報なし日は推定しない
+                days[day] = {k: any("一般開放" in tk for tk in v) for k, v in cell.items()}
+    return base, days
+
+def fetch_tac_open(ctx):
+    """opening.html にリンクされた一般開放予定表PDFを取得し {(year,month): {day: ...}} を返す。失敗は空。"""
+    import io
+    out = {}
+    if ctx.pdfplumber is None:
+        return out
+    try:
+        html = ctx.gettext(TAC_OPEN_URL)
+    except Exception as e:
+        print("tac opening fetch failed:", e)
+        return out
+    seen = set()
+    for p in re.findall(r'href="([^"]+\.pdf)"', html):
+        if p.startswith("http"):
+            url = p
+        elif p.startswith("/"):
+            url = "https://www.tef.or.jp" + p
+        else:
+            url = "https://www.tef.or.jp/tac/" + p
+        if url in seen or len(seen) >= 6 or "checklist" in url:
+            continue
+        if not host_allowed(url, {"tef.or.jp"}):             # 公式ドメイン・https限定
+            continue
+        seen.add(url)
+        try:
+            data = ctx.get_pdf(url)
+            with ctx.pdfplumber.open(io.BytesIO(data)) as pdf:
+                base, days = parse_tac_open_pdf(pdf)
+        except Exception as e:
+            print("tac open pdf failed:", e)
+            continue
+        if base and days:
+            out.setdefault(base, {}).update(days)
+    return out
+
 def source_tac(pool, ctx, cur):
-    # 全館休館=closed（実線）／一部の水面のみ休館=partial（点線）。点線は「利用可: ◯◯」表記に変換。
+    """closure.html（休館）と一般開放予定表PDF（大会・団体貸切）を統合。
+    全館休館・全水面ふさがり=closed（実線）／一部の水面のみ=partial（点線・「利用可: ◯◯」表記）。"""
     raw = parse_tac(ctx.gettext(pool["url"]))
-    closed, partial = {}, {}
+    closed, partial, kyukan_map = {}, {}, {}
     for iso, label in raw.items():
         if "全館" in label:
             closed[iso] = label
             continue
-        closed_s = [s for s in TAC_SURFACES if s in label]      # 休館の水面
-        usable = [s for s in TAC_SURFACES if s not in closed_s]  # 使える水面
-        if closed_s and usable:
-            partial[iso] = "利用可: " + "・".join(usable) + "（" + "・".join(closed_s) + "休館）"
+        ks = [s for s in TAC_SURFACES if s in label]             # 休館の水面
+        usable = [s for s in TAC_SURFACES if s not in ks]        # 使える水面
+        kyukan_map[iso] = set(ks)
+        if ks and usable:
+            partial[iso] = "利用可: " + "・".join(usable) + "（" + "・".join(ks) + "休館）"
         else:
             partial[iso] = label                                 # 想定外表記はそのまま
+    # 一般開放予定表PDF: 一般開放コマが1つも無い水面＝終日 大会・貸切（PDF掲載月のみ上書き）
+    for (yy, mm), days in fetch_tac_open(ctx).items():
+        for day, v in days.items():
+            iso = f"{yy:04d}-{mm:02d}-{day:02d}"
+            if not in_range(iso):
+                continue
+            if v == "休館":
+                closed.setdefault(iso, "全館休館")
+                continue
+            if iso in closed:
+                continue
+            ks = kyukan_map.get(iso, set())
+            usable = [s for s in TAC_SURFACES if v.get(s) and s not in ks]
+            blocked = [s for s in TAC_SURFACES if s not in usable]
+            if not blocked:
+                continue
+            if not usable:                                       # 全水面ふさがり＝実質休場
+                closed[iso] = "全水面 利用不可（大会・貸切等）"
+                partial.pop(iso, None)
+                continue
+            kyu = [s for s in blocked if s in ks]                # 休館でふさがる水面
+            occ = [s for s in blocked if s not in ks]            # 大会・貸切でふさがる水面
+            det = []
+            if kyu:
+                det.append("・".join(kyu) + "休館")
+            if occ:
+                det.append("・".join(occ) + "=大会・貸切")
+            partial[iso] = "利用可: " + "・".join(usable) + "（" + "、".join(det) + "）"
     return {"closed": closed, "partial": partial}
 
 def source_zengyo_partial(pool, ctx, cur):
@@ -192,7 +319,7 @@ def source_yokohama(pool, ctx, cur):
             continue
         seen.add(url)
         try:
-            data = ctx.get(url).content
+            data = ctx.get_pdf(url)
             with ctx.pdfplumber.open(io.BytesIO(data)) as pdf:
                 base, res = parse_yokohama_pdf(pdf)
         except Exception as e:
@@ -263,7 +390,7 @@ def _chiba_closed_from_pdf(pool, ctx):
                 break
     if not pdf or ctx.pdfplumber is None:
         raise ValueError("休場日PDFリンクが見つからない")
-    data = ctx.get(pdf).content
+    data = ctx.get_pdf(pdf)
     with ctx.pdfplumber.open(io.BytesIO(data)) as p:
         txt = "\n".join((pg.extract_text() or "") for pg in p.pages)
     return parse_chiba_text(txt)
@@ -444,6 +571,18 @@ class Ctx:
 
     def get(self, url, **kw):
         return self.requests.get(url, headers=self._ua, timeout=30, **kw)
+
+    def get_pdf(self, url, limit=10 * 1024 * 1024):
+        """PDF取得専用。リダイレクト不追従（host_allowed検証済みURLから他ホストへ飛ばされない）＋
+        サイズ上限つきストリーム読み（巨大ファイルでの更新ジョブのメモリ枯渇防止）。"""
+        r = self.get(url, stream=True, allow_redirects=False)
+        r.raise_for_status()
+        buf = b""
+        for chunk in r.iter_content(65536):
+            buf += chunk
+            if len(buf) > limit:
+                raise ValueError(f"PDF too large (> {limit} bytes): {url}")
+        return buf
 
     def gettext(self, url):
         r = self.get(url)
