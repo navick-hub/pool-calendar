@@ -396,9 +396,14 @@ def _chiba_closed_from_pdf(pool, ctx):
     return parse_chiba_text(txt)
 
 # 水面別カレンダー（公開HTML）。メイン/サブ/飛込 が別 facility_id で日別状態を持つ。
-# セル値: ""=一般開放の空き / "閉場"=時間外(その水面は非営業) / 大会・全面使用・大会準備=イベント占有 / 休場日
+# セル値: ""=貸切予約の空き / "予約不可"・"教室"等=コース貸切は不可だが一般利用は可 /
+#         "閉場"=時間外 / 大会・全面使用・大会準備=イベント占有 / 休場日
+# 公式注記「『全面使用』・『大会』と記入されている部分は一般の方のご利用は出来ません。それ以外はご利用できます」
+# （2026-07-24 現地利用者に確認済み: 「予約不可」はコース貸切予約ができないだけでプール自体は使える）
 CHIBA_SURFACES = {1: "メイン", 2: "サブ", 3: "飛込"}
 CHIBA_OCC = ("大会", "全面使用", "大会準備")   # イベント占有（一般利用不可の要因）
+CHIBA_NOT_USABLE = set(CHIBA_OCC) | {"休場日", "閉場"}   # 一般利用できない/判定対象外のセル
+CHIBA_KNOWN = CHIBA_NOT_USABLE | {"", "予約不可", "教室", "専用使用"}   # 既知セル値（未知値はログだけ出し利用可扱い）
 
 def parse_chiba_calendar(html_text):
     """reserve/calendar の表から {日(int): [各時間帯セルの文字列]} を返す（""＝一般開放の空き）。"""
@@ -451,8 +456,11 @@ def source_chiba(pool, ctx, cur):
             any_event = any_kyujo = False
             for fid, name in CHIBA_SURFACES.items():
                 cells = cals.get(fid, {}).get(day, [])
-                has_open = any(c == "" for c in cells)
+                # 空き("")だけでなく「予約不可」「教室」等も一般利用は可（公式注記どおり）
+                has_open = any(c not in CHIBA_NOT_USABLE for c in cells)
                 has_event = any(c in CHIBA_OCC for c in cells)
+                for c in set(cells) - CHIBA_KNOWN:      # 未知セル値は精度低下の兆候なのでログに残す
+                    print(f"chiba unknown cell {name} {iso}: {c!r}")
                 any_event = any_event or has_event
                 any_kyujo = any_kyujo or ("休場日" in cells)
                 if has_open:
